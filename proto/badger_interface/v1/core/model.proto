@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package user.v1;
+option go_package = "memory-storage/v1;mock";
+
+
+message User {
+  int64 id   = 1;
+  string name = 2;
+  string type = 3;
+  string office = 4;
+}

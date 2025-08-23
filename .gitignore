@@ -1,0 +1,16 @@
+.vscode
+.idea
+.run
+bin/
+
+vendor
+/config/local.yaml
+/config/local_1.json
+/config/local_2.json
+/config/local_generate.json
+/config/prod_el.json
+/config/local_3.json
+/config/local_4.json
+/config/prod_xc.json
+/config/try_local_prod.json
+/cmd/github.com/PavelAgarkov/template/github.com/PavelAgarkov/template-build-1

@@ -1,0 +1,40 @@
+info:
+  contact: {}
+paths:
+  /health:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Health ping
+      tags:
+      - health
+  /liveness:
+    get:
+      description: Returns 200 if the service is running.
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Liveness probe
+      tags:
+      - health
+  /readiness:
+    get:
+      description: 200 – ready; 503 – dependency problem.
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "503":
+          description: Service Unavailable
+          schema:
+            type: string
+      summary: Readiness probe
+      tags:
+      - health
+swagger: "2.0"

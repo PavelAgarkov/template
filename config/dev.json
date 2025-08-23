@@ -1,0 +1,110 @@
+{
+  "logger": {
+    "debug": true,
+    "service": "template",
+    "colorize_fields": ["component"],
+    "is_cloud_logging" : false
+  },
+  "simple_server": {
+    "addr": ":9000"
+  },
+  "server": {
+    "addr": ":9009",
+    "network": "tcp",
+    "reflection_enabled": true,
+    "out_grpc_body_size": 32,
+    "in_grpc_body_size": 32,
+    "time_out": "10s"
+  },
+  "redis": {
+    "address": "localhost:6379",
+    "username": "",
+    "password" : "",
+    "db": 0
+  },
+  "clickhouse": {
+    "host": "localhost",
+    "port": 8001,
+    "username": "user",
+    "password": "SpQpFWSQAR40agou",
+    "max_open_conn": 1,
+    "max_idle_conn": 1,
+    "conn_max_idle_time": "20m",
+    "conn_max_life_time": "24h"
+  },
+  "k8s_haproxy_pgsql_master": {
+    "host": "localhost",
+    "port": "5433",
+    "username": "postgres",
+    "password": "qwerty12345",
+    "database": "cloud_template",
+    "ssl_mode": "disable",
+    "max_opened_connections": 30,
+    "connection_max_idle_time": "1800s",
+    "connection_max_life_time": "3600s",
+    "application_name" : "goods-turnover-scheduler",
+    "health_check_period" : "15s",
+    "connect_timeout" : "1s",
+    "max_conn_life_time_jitter" : "30s"
+  },
+  "k8s_haproxy_pgsql_replicaasync": {
+    "host": "localhost",
+    "port": "5433",
+    "username": "postgres",
+    "password": "qwerty12345",
+    "database": "cloud_template",
+    "ssl_mode": "disable",
+    "max_opened_connections": 30,
+    "connection_max_idle_time": "1800s",
+    "connection_max_life_time": "3600s",
+    "application_name" : "goods-turnover-async-reader",
+    "health_check_period" : "15s",
+    "connect_timeout" : "1s",
+    "max_conn_life_time_jitter" : "30s"
+  },
+  "k8s_haproxy_pgsql_replicasync": {
+    "host": "localhost",
+    "port": "5433",
+    "username": "postgres",
+    "password": "qwerty12345",
+    "database": "cloud_template",
+    "ssl_mode": "disable",
+    "max_opened_connections": 30,
+    "connection_max_idle_time": "1800s",
+    "connection_max_life_time": "3600s",
+    "application_name" : "goods-turnover-sync-reader",
+    "health_check_period" : "15s",
+    "connect_timeout" : "1s",
+    "max_conn_life_time_jitter" : "30s"
+  },
+  "badger_db_master" : {
+    "in_memory" : true,
+    "read_only" : false,
+    "with_metrics": true,
+    "gc_interval" : "600s",
+    "num_goroutines" : 2,
+    "value_thresh_hold" : 1024,
+    "base_table_size" : 64,
+    "num_compactors" : 4,
+    "zstd_compression_level" : 3,
+    "detect_conflicts" : true,
+    "encoder" : "proto",
+    "logging_level" : "ERROR",
+    "ram_limit_memory" : 2
+  },
+  "application": {
+    "cores": 1,
+    "heap_overflow" : 100,
+    "clickhouse_out_rate": 1,
+    "command_bus_rate": 1,
+    "core": {
+      "remove_unupdated_nomenclature_cache_interval" : "*/10 * * * * *",
+      "remove_unupdated_nomenclature_cache_duration" : "6s",
+      "schedule_delete_unused_nomenclature_filter_interval": "*/10 * * * * *",
+      "ttl_cache_recompiler_interval": "0 */5 * * * *",
+      "schedule_nm_tasks_interval": "1s",
+      "schedule_commands_bus_interval": "100ms",
+      "allowed_time_to_clickhouse_query": "1s"
+    }
+  }
+}

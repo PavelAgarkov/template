@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package badger_interface.v1;
+option go_package = "github.com/PavelAgarkov/template/badger-interface/pkg/proto/badger-interface/v1;mock";
+
+
+service BadgerService {
+  rpc BuildQueryBadger(BuildQueryBadgerRequest) returns (BuildQueryBadgeResponse);
+}
+
+message Where {
+  string key = 1;
+  string value = 2;
+}
+
+message builder {
+  string database = 1;
+  string version = 2;
+  string table = 3;
+}
+
+message query {
+  builder builder = 1;
+  repeated Where where_is = 2;
+}
+
+message BuildQueryBadgerRequest {
+  query query = 1;
+}
+
+message BuildQueryBadgeResponse {
+   repeated string result_json = 1;
+}

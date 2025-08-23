@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package cloud_template.v1;
+import "google/protobuf/timestamp.proto";
+option go_package = "github.com/PavelAgarkov/template/github.com/PavelAgarkov/template/proto/github.com/PavelAgarkov/template/v1;mock";
+
+service GoodsTurnoverService {
+  // Получить оборачиваемость товаров по офису и набору номенклатур
+  rpc GetTurnover      (GetTurnoverRequest) returns (GetTurnoverResponse);
+
+  // Пересчитать оборачиваемость товаров по всему офису и прогреть по ним кеш
+  rpc RecalculateTurnoverForOffice(RecalculateTurnoverForOfficeRequest) returns (RecalculateTurnoverForOfficeResponse);
+
+  // Прогреть кеш оборачиваемости товаров по офису и набору номенклатур
+  rpc WarmNms(WarmNmsRequest) returns (WarmNmsResponse);
+
+  // Получить список по переданному минимальному nm_id батчем со смещением 
+  rpc GetTurnoverByNmsAndOfficeWithOffset(GetTurnoverByNmsAndOfficeWithOffsetRequest) returns (GetTurnoverByNmsAndOfficeWithOffsetResponse);
+}
+
+message GetTurnoverByNmsAndOfficeWithOffsetRequest {
+  int64 office_id = 1;
+  int64 current_nm_id = 2; // найдите самый минимальны nm_id
+  int64 offset = 3; // 1 - 15 000
+}
+
+message GetTurnoverByNmsAndOfficeWithOffsetResponse {
+  repeated GoodsTurnover data = 1; // тут будут только те номенклатуры, которые есть в базе. Которых нет, не будет
+  int64 office_id = 2;
+  int64 next_predicted_nm_id = 3; // следующий вероятный nm_id списка GoodsTurnover
+}
+
+message WarmNmsRequest {
+  repeated int64 nm_ids = 1; // 1 - 15 000 элементов
+  int64        office_id = 2; // > 0
+}
+
+message WarmNmsResponse{}
+
+message RecalculateTurnoverForOfficeRequest {
+  int64        office_id = 1; // > 0
+}
+
+message RecalculateTurnoverForOfficeResponse {}
+
+message GetTurnoverRequest {
+  repeated int64 nm_ids = 1; // 1 - 15 000 элементов
+  int64        office_id = 2; // > 0
+}
+
+message GetTurnoverResponse {
+  repeated GoodsTurnover data = 1; // тут будут только те номенклатуры, которые есть в базе. Которых нет, не будет
+}
+
+message GoodsTurnover {
+  int64 nm_id = 1;
+  int64 count_orders = 2;
+  int64 quantity_end_period = 3;
+  int64 quantity_start_period = 4;
+  int64 period_days = 5;
+  int64 turnover_rate = 6; // оборачиваемость для коэффициента который не удалось высчитать (null) == -1000
+  google.protobuf.Timestamp last_update = 7;
+  string last_update_str = 8;
+}
