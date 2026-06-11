@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package cloud_template.v1;
 import "google/protobuf/timestamp.proto";
-option go_package = "github.com/PavelAgarkov/template/github.com/PavelAgarkov/template/proto/github.com/PavelAgarkov/template/v1;mock";
+option go_package = "gitlab.wildberries.ru/whs-ai/whs-ai/cloud-template/proto/cloud-template/v1;mock";
 
 service GoodsTurnoverService {
   // Получить оборачиваемость товаров по офису и набору номенклатур

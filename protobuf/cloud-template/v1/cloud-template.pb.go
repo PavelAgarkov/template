@@ -546,7 +546,7 @@ const file_cloud_template_v1_cloud_template_proto_rawDesc = "" +
 	"\vGetTurnover\x12%.cloud_template.v1.GetTurnoverRequest\x1a&.cloud_template.v1.GetTurnoverResponse\x12\x8f\x01\n" +
 	"\x1cRecalculateTurnoverForOffice\x126.cloud_template.v1.RecalculateTurnoverForOfficeRequest\x1a7.cloud_template.v1.RecalculateTurnoverForOfficeResponse\x12P\n" +
 	"\aWarmNms\x12!.cloud_template.v1.WarmNmsRequest\x1a\".cloud_template.v1.WarmNmsResponse\x12\xa4\x01\n" +
-	"#GetTurnoverByNmsAndOfficeWithOffset\x12=.cloud_template.v1.GetTurnoverByNmsAndOfficeWithOffsetRequest\x1a>.cloud_template.v1.GetTurnoverByNmsAndOfficeWithOffsetResponseBrZpgithub.com/PavelAgarkov/template/github.com/PavelAgarkov/template/proto/github.com/PavelAgarkov/template/v1;mockb\x06proto3"
+	"#GetTurnoverByNmsAndOfficeWithOffset\x12=.cloud_template.v1.GetTurnoverByNmsAndOfficeWithOffsetRequest\x1a>.cloud_template.v1.GetTurnoverByNmsAndOfficeWithOffsetResponseBQZOgitlab.wildberries.ru/whs-ai/whs-ai/cloud-template/proto/cloud-template/v1;mockb\x06proto3"
 
 var (
 	file_cloud_template_v1_cloud_template_proto_rawDescOnce sync.Once

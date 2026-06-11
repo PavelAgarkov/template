@@ -4,9 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
-
 	"github.com/PavelAgarkov/template/internal/models/pg_model"
+	"time"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/PavelAgarkov/service-pkg/logger"

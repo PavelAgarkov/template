@@ -10,6 +10,8 @@ import (
 	badger2 "github.com/PavelAgarkov/template/internal/repository/badger"
 	pb "github.com/PavelAgarkov/template/protobuf/badger_interface/v1/service"
 
+	//pb "github.com/PavelAgarkov/template/protobuf/badger_interface/v1/service"
+
 	sdk "github.com/PavelAgarkov/badger-wrapper"
 	v1model "github.com/PavelAgarkov/template/protobuf/badger_interface/v1/core"
 	"github.com/dgraph-io/badger/v4"

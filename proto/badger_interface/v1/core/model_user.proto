@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package template.user.v1;
+
+option go_package = "github.com/PavelAgarkov/template/protobuf/badger_interface/v1/core;core";
+
+message User {
+  int64 id = 1;
+  string name = 2;
+  string type = 3;
+  string office = 4;
+}

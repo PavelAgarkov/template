@@ -1,9 +1,8 @@
 package routes
 
 import (
-	"net/http"
-
 	"github.com/PavelAgarkov/template/internal/service/readiness"
+	"net/http"
 
 	"github.com/PavelAgarkov/service-pkg/logger"
 	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"

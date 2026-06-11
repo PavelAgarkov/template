@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	"time"
-
 	"github.com/PavelAgarkov/template/internal/config"
 	"github.com/PavelAgarkov/template/internal/service/readiness"
+	"net/http"
+	"time"
 
 	"github.com/PavelAgarkov/service-pkg/logger"
 	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"

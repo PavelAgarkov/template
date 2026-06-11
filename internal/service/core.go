@@ -3,17 +3,17 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"github.com/PavelAgarkov/template/internal/config"
 	"github.com/PavelAgarkov/template/internal/models"
 	"github.com/PavelAgarkov/template/internal/models/pg_model"
 	"github.com/PavelAgarkov/template/internal/service/command_bus"
 	"github.com/PavelAgarkov/template/internal/service/nomenclature"
+	"time"
 
 	"github.com/PavelAgarkov/service-pkg/logger"
 	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
 	scheduler2 "github.com/PavelAgarkov/service-pkg/scheduler"
+
 	"github.com/jackc/pgx/v5"
 )
 

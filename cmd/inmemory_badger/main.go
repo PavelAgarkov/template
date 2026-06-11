@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/PavelAgarkov/template/container"
 	"github.com/PavelAgarkov/template/internal/api"
 	v1 "github.com/PavelAgarkov/template/internal/api/badger_interface/v1"
@@ -10,10 +12,11 @@ import (
 	"github.com/PavelAgarkov/template/internal/repository/badger"
 	"github.com/PavelAgarkov/template/internal/service/budger_service"
 	badgerpbv1 "github.com/PavelAgarkov/template/protobuf/badger_interface/v1/service"
-	"time"
+
+	"github.com/PavelAgarkov/service-pkg/application"
 
 	sdk "github.com/PavelAgarkov/badger-wrapper"
-	"github.com/PavelAgarkov/service-pkg/application"
+
 	"google.golang.org/grpc"
 )
 

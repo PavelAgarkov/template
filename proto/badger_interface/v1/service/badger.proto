@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package badger_interface.v1;
-option go_package = "github.com/PavelAgarkov/template/badger-interface/pkg/proto/badger-interface/v1;mock";
+option go_package = "gitlab.wildberries.ru/whs-ai/whs-ai/badger-interface/pkg/proto/badger-interface/v1;mock";
 
 
 service BadgerService {

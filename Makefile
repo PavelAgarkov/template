@@ -53,8 +53,8 @@ generate_token:
 
 
 CFG = GOMEMLIMIT=256MiB APP_CONFIG_PATH_LOCAL=./config/dev.json APP_ENV=local
-BIN = ./cmd/cloud-template/template-build-1
-SRC = ./cmd/cloud-template
+BIN = ./cmd/github.com/PavelAgarkov/template/template-build-1
+SRC = ./cmd/github.com/PavelAgarkov/template
 
 .PHONY: build_service
 build_service:

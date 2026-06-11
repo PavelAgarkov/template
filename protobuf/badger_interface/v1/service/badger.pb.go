@@ -294,7 +294,7 @@ const file_badger_interface_v1_service_badger_proto_rawDesc = "" +
 	"\vresult_json\x18\x01 \x03(\tR\n" +
 	"resultJson2\x7f\n" +
 	"\rBadgerService\x12n\n" +
-	"\x10BuildQueryBadger\x12,.badger_interface.v1.BuildQueryBadgerRequest\x1a,.badger_interface.v1.BuildQueryBadgeResponseBVZTgithub.com/PavelAgarkov/template/badger-interface/pkg/proto/badger-interface/v1;mockb\x06proto3"
+	"\x10BuildQueryBadger\x12,.badger_interface.v1.BuildQueryBadgerRequest\x1a,.badger_interface.v1.BuildQueryBadgeResponseBYZWgitlab.wildberries.ru/whs-ai/whs-ai/badger-interface/pkg/proto/badger-interface/v1;mockb\x06proto3"
 
 var (
 	file_badger_interface_v1_service_badger_proto_rawDescOnce sync.Once

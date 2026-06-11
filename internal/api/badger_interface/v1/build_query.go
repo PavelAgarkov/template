@@ -2,9 +2,8 @@ package v1
 
 import (
 	"context"
-	"strings"
-
 	pb "github.com/PavelAgarkov/template/protobuf/badger_interface/v1/service"
+	"strings"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

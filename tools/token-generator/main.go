@@ -1,15 +1,15 @@
 package main
 
 import (
+	"cloud-template/container"
+	"cloud-template/internal/config"
+	"cloud-template/internal/repository/postgres"
+	"cloud-template/internal/service/autorization"
 	"context"
 	"fmt"
-	loggerwrapper "github.com/PavelAgarkov/service-pkg/logger"
-	"github.com/PavelAgarkov/template/container"
-	"github.com/PavelAgarkov/template/internal/config"
-	"github.com/PavelAgarkov/template/internal/repository/postgres"
-	"github.com/PavelAgarkov/template/internal/service/autorization"
 
 	"github.com/PavelAgarkov/service-pkg/application"
+	"github.com/PavelAgarkov/service-pkg/logger"
 	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
 
 	"os"
@@ -22,7 +22,7 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		logger.WritePanicLog(baseCtx, &loggerwrapper.LogEntry{
+		logger.WritePanicLog(baseCtx, &logger_wrapper.LogEntry{
 			Msg:       "Failed to load config",
 			Component: "token-generator",
 			Method:    "main",
@@ -36,14 +36,14 @@ func main() {
 	defer app.Stop()
 	defer app.RegisterRecovers()()
 
-	container.InitLogger()
+	container.InitLogger(&cfg.Logger)
 	postgresRepository := container.InitPostgres(baseCtx, app, cfg.PostgresMaster, cfg.PostgresAsyncReplicas, cfg.PostgresSyncReplicas)
 	authorizingRepository := postgres.NewAuthorizationRepository(postgresRepository)
 	authorizationService := autorization.NewService(baseCtx, authorizingRepository)
 	app.RegisterShutdown("authorizationService", authorizationService.Stop, application.ImmediatePriority)
 
 	if len(os.Args) < 2 {
-		logger.WriteErrorLog(baseCtx, &loggerwrapper.LogEntry{
+		logger.WriteErrorLog(baseCtx, &logger_wrapper.LogEntry{
 			Msg:       "Client name is required",
 			Component: "token-generator",
 			Method:    "main",
@@ -57,7 +57,7 @@ func main() {
 	clientName := os.Args[1]
 	authorized, _ := authorizationService.Generate(baseCtx, clientName)
 
-	logger.WriteInfoLog(baseCtx, &loggerwrapper.LogEntry{
+	logger.WriteInfoLog(baseCtx, &logger_wrapper.LogEntry{
 		Msg:       fmt.Sprintf("Client: %s\nToken: %s\n", authorized.Client, authorized.Token),
 		Component: "token-generator",
 		Start:     &now,

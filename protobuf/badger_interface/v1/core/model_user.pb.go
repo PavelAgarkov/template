@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.6
 // 	protoc        v6.31.1
-// source: badger_interface/v1/core/model.proto
+// source: badger_interface/v1/core/model_user.proto
 
-package mock
+package core
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -33,7 +33,7 @@ type User struct {
 
 func (x *User) Reset() {
 	*x = User{}
-	mi := &file_badger_interface_v1_core_model_proto_msgTypes[0]
+	mi := &file_badger_interface_v1_core_model_user_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -45,7 +45,7 @@ func (x *User) String() string {
 func (*User) ProtoMessage() {}
 
 func (x *User) ProtoReflect() protoreflect.Message {
-	mi := &file_badger_interface_v1_core_model_proto_msgTypes[0]
+	mi := &file_badger_interface_v1_core_model_user_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58,7 +58,7 @@ func (x *User) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use User.ProtoReflect.Descriptor instead.
 func (*User) Descriptor() ([]byte, []int) {
-	return file_badger_interface_v1_core_model_proto_rawDescGZIP(), []int{0}
+	return file_badger_interface_v1_core_model_user_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *User) GetId() int64 {
@@ -89,34 +89,34 @@ func (x *User) GetOffice() string {
 	return ""
 }
 
-var File_badger_interface_v1_core_model_proto protoreflect.FileDescriptor
+var File_badger_interface_v1_core_model_user_proto protoreflect.FileDescriptor
 
-const file_badger_interface_v1_core_model_proto_rawDesc = "" +
+const file_badger_interface_v1_core_model_user_proto_rawDesc = "" +
 	"\n" +
-	"$badger_interface/v1/core/model.proto\x12\auser.v1\"V\n" +
+	")badger_interface/v1/core/model_user.proto\x12\x10template.user.v1\"V\n" +
 	"\x04User\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x03 \x01(\tR\x04type\x12\x16\n" +
-	"\x06office\x18\x04 \x01(\tR\x06officeB\x18Z\x16memory-storage/v1;mockb\x06proto3"
+	"\x06office\x18\x04 \x01(\tR\x06officeBIZGgithub.com/PavelAgarkov/template/protobuf/badger_interface/v1/core;coreb\x06proto3"
 
 var (
-	file_badger_interface_v1_core_model_proto_rawDescOnce sync.Once
-	file_badger_interface_v1_core_model_proto_rawDescData []byte
+	file_badger_interface_v1_core_model_user_proto_rawDescOnce sync.Once
+	file_badger_interface_v1_core_model_user_proto_rawDescData []byte
 )
 
-func file_badger_interface_v1_core_model_proto_rawDescGZIP() []byte {
-	file_badger_interface_v1_core_model_proto_rawDescOnce.Do(func() {
-		file_badger_interface_v1_core_model_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_badger_interface_v1_core_model_proto_rawDesc), len(file_badger_interface_v1_core_model_proto_rawDesc)))
+func file_badger_interface_v1_core_model_user_proto_rawDescGZIP() []byte {
+	file_badger_interface_v1_core_model_user_proto_rawDescOnce.Do(func() {
+		file_badger_interface_v1_core_model_user_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_badger_interface_v1_core_model_user_proto_rawDesc), len(file_badger_interface_v1_core_model_user_proto_rawDesc)))
 	})
-	return file_badger_interface_v1_core_model_proto_rawDescData
+	return file_badger_interface_v1_core_model_user_proto_rawDescData
 }
 
-var file_badger_interface_v1_core_model_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
-var file_badger_interface_v1_core_model_proto_goTypes = []any{
-	(*User)(nil), // 0: user.v1.User
+var file_badger_interface_v1_core_model_user_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_badger_interface_v1_core_model_user_proto_goTypes = []any{
+	(*User)(nil), // 0: template.user.v1.User
 }
-var file_badger_interface_v1_core_model_proto_depIdxs = []int32{
+var file_badger_interface_v1_core_model_user_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
 	0, // [0:0] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
@@ -124,26 +124,26 @@ var file_badger_interface_v1_core_model_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_badger_interface_v1_core_model_proto_init() }
-func file_badger_interface_v1_core_model_proto_init() {
-	if File_badger_interface_v1_core_model_proto != nil {
+func init() { file_badger_interface_v1_core_model_user_proto_init() }
+func file_badger_interface_v1_core_model_user_proto_init() {
+	if File_badger_interface_v1_core_model_user_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_badger_interface_v1_core_model_proto_rawDesc), len(file_badger_interface_v1_core_model_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_badger_interface_v1_core_model_user_proto_rawDesc), len(file_badger_interface_v1_core_model_user_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   1,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_badger_interface_v1_core_model_proto_goTypes,
-		DependencyIndexes: file_badger_interface_v1_core_model_proto_depIdxs,
-		MessageInfos:      file_badger_interface_v1_core_model_proto_msgTypes,
+		GoTypes:           file_badger_interface_v1_core_model_user_proto_goTypes,
+		DependencyIndexes: file_badger_interface_v1_core_model_user_proto_depIdxs,
+		MessageInfos:      file_badger_interface_v1_core_model_user_proto_msgTypes,
 	}.Build()
-	File_badger_interface_v1_core_model_proto = out.File
-	file_badger_interface_v1_core_model_proto_goTypes = nil
-	file_badger_interface_v1_core_model_proto_depIdxs = nil
+	File_badger_interface_v1_core_model_user_proto = out.File
+	file_badger_interface_v1_core_model_user_proto_goTypes = nil
+	file_badger_interface_v1_core_model_user_proto_depIdxs = nil
 }

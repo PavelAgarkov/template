@@ -5,11 +5,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"sync"
-	"time"
-
 	"github.com/PavelAgarkov/template/internal/models/pg_model"
 	"github.com/PavelAgarkov/template/internal/repository/postgres"
+	"sync"
+	"time"
 
 	"github.com/PavelAgarkov/service-pkg/logger"
 	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
@@ -34,17 +33,17 @@ type Service struct {
 }
 
 func NewService(ctx context.Context, authorizationRepository postgres.AuthorizationRepositoryInterface) *Service {
-	localCtx, cancel := context.WithCancel(ctx)
+	//localCtx, cancel := context.WithCancel(ctx)
 	s := &Service{
 		authorizationRepository: authorizationRepository,
 		resolvedUsers:           make(map[token]clientName),
-		cancelCtx:               cancel,
+		//cancelCtx:               cancel,
 	}
-	err := s.updateUsers(ctx)
-	if err != nil {
-		panic(fmt.Sprintf("failed to update users: %v", err))
-	}
-	s.reload(localCtx)
+	//err := s.updateUsers(ctx)
+	//if err != nil {
+	//	panic(fmt.Sprintf("failed to update users: %v", err))
+	//}
+	//s.reload(localCtx)
 	//s.resolvedUsers["43ed87a019b3515a6f2848eae4cdd44751777176d"] = "Obi Wan Kenobi"
 
 	return s

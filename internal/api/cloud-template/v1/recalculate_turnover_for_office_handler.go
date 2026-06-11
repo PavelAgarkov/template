@@ -2,7 +2,6 @@ package v1
 
 import (
 	"context"
-
 	pb "github.com/PavelAgarkov/template/protobuf/cloud-template/v1"
 
 	"google.golang.org/grpc/codes"

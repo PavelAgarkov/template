@@ -3,17 +3,36 @@ package container
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/http/pprof"
+	"os"
+	"regexp"
+	"sync"
+	"time"
+
 	"github.com/PavelAgarkov/template/internal/config"
 	routes "github.com/PavelAgarkov/template/internal/open_api"
 	"github.com/PavelAgarkov/template/internal/repository/clickhouse"
 	"github.com/PavelAgarkov/template/internal/repository/postgres"
+	"github.com/PavelAgarkov/template/internal/service/kafka/api"
 	"github.com/PavelAgarkov/template/internal/service/readiness"
+	"github.com/PavelAgarkov/template/internal/service/scheduler"
+	chi2 "github.com/PavelAgarkov/template/pkg/chi"
+	kafka2 "github.com/PavelAgarkov/template/pkg/kafka"
+	"github.com/PavelAgarkov/template/pkg/metrics"
 	_ "github.com/PavelAgarkov/template/swagger_docs" // Сгенерированный пакет с описанием OpenAPI
-	"log"
-	"net/http"
-	"time"
 
 	simpleServer "github.com/PavelAgarkov/template/pkg/server"
+
+	"github.com/bytedance/sonic"
+	"github.com/go-chi/chi/v5"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/sasl/scram"
+	rateenvelopequeue "github.com/simplegear/rate-envelope-queue"
 
 	"github.com/PavelAgarkov/service-pkg/application"
 	clickhouse2 "github.com/PavelAgarkov/service-pkg/database/clickhouse"
@@ -23,6 +42,7 @@ import (
 	scheduler2 "github.com/PavelAgarkov/service-pkg/scheduler"
 	"github.com/PavelAgarkov/service-pkg/server"
 	"github.com/PavelAgarkov/service-pkg/watchdog"
+
 	"github.com/go-redis/redis/v8"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -53,6 +73,46 @@ func InitClickhouseBusher(
 	})
 }
 
+func InitOrchestrator(app *application.App, wdog watchdog.LeaderElectingWatchdog, orchestrator rateenvelopequeue.SingleQueuePool) {
+	watcher := wdog.Elect(watchdog.Config{
+		ElectionName: watchdog.Cron,
+		Expiration:   watchdog.DefaultLeaderExpiration,
+	})
+
+	start := func() {
+		orchestrator.Start()
+		envelope, err := rateenvelopequeue.NewEnvelope(
+			rateenvelopequeue.WithScheduleModeInterval(5*time.Second),
+			rateenvelopequeue.WithInvoke(func(ctx context.Context, envelope *rateenvelopequeue.Envelope) error {
+				logger.WriteInfoLog(context.Background(), &logger_wrapper.LogEntry{
+					Msg:       "Envelope invoked",
+					Component: "orchestrator",
+				})
+				return nil
+			}),
+		)
+		if err != nil {
+			panic(err)
+		}
+		err = orchestrator.Send(envelope)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	stop := func() {
+		orchestrator.Stop()
+	}
+
+	app.RegisterWatchdogsLeadership(&application.LeaderSupervisor{
+		Stop:           stop,
+		Start:          start,
+		Watchdog:       wdog,
+		SupervisorName: watchdog.Cron,
+		Watcher:        watcher,
+	})
+}
+
 func InitCron(app *application.App, wdog watchdog.LeaderElectingWatchdog, cron *scheduler2.Cron) {
 	watcher := wdog.Elect(watchdog.Config{
 		ElectionName: watchdog.Cron,
@@ -74,6 +134,13 @@ func InitScheduler(ctx context.Context, app *application.App, schedulers ...sche
 }
 
 func InitLogger() {
+	//l := xlog.NewLoggerWithOptions(cfg,
+	//	zap.AddCallerSkip(1),
+	//	zap.AddStacktrace(zapcore.DPanicLevel),
+	//	zap.AddStacktrace(zapcore.PanicLevel),
+	//	zap.AddStacktrace(zapcore.FatalLevel),
+	//)
+	//xlog.SetGlobalLogger(l)
 	if err := logger.InitLoggerForStdout(
 		zapcore.InfoLevel, false, nil,
 		zap.AddCallerSkip(2),
@@ -290,8 +357,18 @@ func InitGorillaHttpServer(ctx context.Context, app *application.App, serverConf
 	app.RegisterShutdown("simple_server", simpleHttpServerShutdownFunctionHttp, application.ImmediatePriority)
 }
 
-func InitSimpleServer(ctx context.Context, app *application.App, serverConfig config.SimpleServer, live *readiness.Service) {
+func InitSimpleServer(ctx context.Context, app *application.App, serverConfig config.SimpleServer, live *readiness.Service, consumerController api.ConsumerControllerInterface) {
 	router := func(mux *http.ServeMux, container *simpleServer.Container) {
+		if serverConfig.NeedProfiler {
+			mux.HandleFunc("/debug/pprof/", pprof.Index)
+			mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+			mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+			mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+			mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		}
+
+		mux.Handle("/manage/consumer/", consumerController.Controller())
+
 		mux.HandleFunc("/liveness", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
@@ -326,9 +403,16 @@ func InitSimpleServer(ctx context.Context, app *application.App, serverConfig co
 func InitChiHTTPServer(
 	ctx context.Context,
 	app *application.App,
-	serverCfg config.SimpleServer,
+	serverCfg config.ServerHttp,
 	rediness *readiness.Service,
+	proxy api.Proxy,
 ) {
+
+	storage := server.NewPreShutdownState(
+		serverCfg.PreShutdownState.Need,
+		serverCfg.PreShutdownState.TimeForDraining,
+		serverCfg.PreShutdownState.TimeForShutdown,
+	)
 	// Регистрируем роуты
 	router := func(s *server.HTTPServerChi) {
 		s.Router.Get("/liveness", routes.LivenessProbe)
@@ -340,15 +424,400 @@ func InitChiHTTPServer(
 		s.Router.Get("/api/swagger/*", httpSwagger.Handler(
 			httpSwagger.URL("/api/swagger/doc.json"),
 		))
+
+		s.Router.Route("/v1", func(r chi.Router) {
+			r.Route("/stream", func(r chi.Router) {
+				r.Route("/receive", func(r chi.Router) {
+					r.Use(chi2.MetricsMiddleware)
+					r.Use(server.DrainMiddleware(storage, func(w http.ResponseWriter) {
+						func(w http.ResponseWriter, msg string, status int, code int) {
+							type RequestError struct {
+								Message string `json:"message"`
+								Code    int    `json:"code"`
+							}
+							w.Header().Set("Content-Type", "application/json")
+							w.WriteHeader(status)
+							_, internalErr := sonic.Marshal(&RequestError{
+								Message: msg,
+								Code:    code,
+							})
+
+							if internalErr != nil {
+								_, _ = sonic.Marshal(&RequestError{
+									Message: msg,
+									Code:    code,
+								})
+								logger.WriteErrorLog(nil, &logger_wrapper.LogEntry{
+									Msg:       "failed to write json error response",
+									Error:     internalErr,
+									Component: "ProxyAPI",
+									Method:    "jsonError",
+								})
+							}
+						}(w, "server in draining state try again", http.StatusServiceUnavailable, 5555)
+					}))
+					// /v1/stream/receive/shk-on-place
+					r.Post("/shk-on-place", proxy.ReceiveShkOnPlaceBytesBufferStreamV1)
+					// /v1/stream/receive/tare-move
+					r.Post("/tare-move", proxy.ReceiveTareMoveBytesBufferStreamV1)
+				})
+			})
+		})
 	}
 
 	// Стартуем HTTP-сервер и регистрируем функцию остановки в приложении
 	shutdown := server.CreateHTTPChiServer(
 		router,
 		serverCfg.Addr,
-		server.LoggerChiContextMiddleware(),
+		storage,
 		server.RecoverChiMiddleware,
-		server.LoggingChiMiddleware,
+		server.LoggerChiContextMiddleware(),
+		server.LoggingChiMiddleware, // убрать после отладки
 	)
 	app.RegisterShutdown("chi_http_server", shutdown, application.ImmediatePriority)
+}
+
+func InitRoboScheduler(parent context.Context, app *application.App, SchedulerCfg config.Scheduler, router scheduler.Contract) rateenvelopequeue.SingleQueuePool {
+	orchestrator := rateenvelopequeue.NewRateEnvelopeQueue(
+		parent,
+		SchedulerCfg.Name,
+		rateenvelopequeue.WithLimitOption(SchedulerCfg.WorkerPool),
+		rateenvelopequeue.WithStopModeOption(rateenvelopequeue.Drain),
+	)
+
+	for _, job := range SchedulerCfg.Schedule {
+		envelope, err := rateenvelopequeue.NewEnvelope(
+			rateenvelopequeue.WithType(job.Name),
+			rateenvelopequeue.WithScheduleModeInterval(time.Duration(job.Time)),
+			rateenvelopequeue.WithInvoke(
+				func(ctx context.Context, envelope *rateenvelopequeue.Envelope) error {
+					callCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+					defer cancel()
+
+					call := router.Route(callCtx, job.Name)
+					if call == nil {
+						return nil
+					}
+					err := call(callCtx)
+					if err != nil {
+						return fmt.Errorf("failed to execute scheduled job %q: %w", job.Name, err)
+					}
+					return nil
+				},
+			),
+		)
+		if err != nil {
+			panic(err)
+		}
+		err = orchestrator.Send(envelope)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return orchestrator
+}
+
+func InitTopicConsumerPool(
+	parent context.Context,
+	app *application.App,
+	consumerConfig config.Consumer,
+	handler func(context.Context, []kafka.Message) error,
+) (rateenvelopequeue.SingleQueuePool, func()) {
+	orchestrator := rateenvelopequeue.NewRateEnvelopeQueue(
+		parent,
+		fmt.Sprintf("orchestrator.%s", consumerConfig.Name),
+		rateenvelopequeue.WithLimitOption(consumerConfig.WorkerPool),
+		rateenvelopequeue.WithStopModeOption(rateenvelopequeue.Stop),
+	)
+
+	restart := func() {
+		consumerInternalConfigs := kafka2.Configs{
+			Name:              consumerConfig.Name,
+			WorkersInPool:     consumerConfig.WorkerPool,
+			Brokers:           consumerConfig.Brokers,
+			Topic:             consumerConfig.Topic[0].Topic,
+			GroupID:           consumerConfig.ReadConfigs.GroupID,
+			BatchSize:         consumerConfig.ReadConfigs.BatchSize,
+			BatchDeadline:     time.Duration(consumerConfig.ReadConfigs.BatchDeadline),
+			MinBytes:          consumerConfig.ReadConfigs.MinBytes,
+			MaxBytes:          consumerConfig.ReadConfigs.MaxBytes,
+			CommitInterval:    0, // отключаем авто-коммит - ручной коммит после успешной обработки пачки
+			SessionTimeout:    time.Duration(consumerConfig.ReadConfigs.SessionTimeout),
+			HeartbeatInterval: time.Duration(consumerConfig.ReadConfigs.HeartbeatInterval),
+			RebalanceTimeout:  time.Duration(consumerConfig.ReadConfigs.RebalanceTimeout),
+			MaxWait:           time.Duration(consumerConfig.ReadConfigs.MaxWait),
+			QueueCapacity:     consumerConfig.ReadConfigs.QueueCapacity,
+			ReaderDownTimeout: time.Duration(consumerConfig.ReadConfigs.ReaderDownTimeout),
+		}
+		switch consumerConfig.ReadConfigs.Auth.Mechanism {
+		case "SASL_PLAINTEXT_SHA256":
+			mechanism, err := scram.Mechanism(scram.SHA256, consumerConfig.ReadConfigs.Auth.Login, consumerConfig.ReadConfigs.Auth.Password)
+			if err != nil {
+				panic(fmt.Sprintf("failed to create SASL mechanism: %v", err))
+			}
+
+			dialer := &kafka.Dialer{
+				Timeout:       10 * time.Second,
+				KeepAlive:     30 * time.Second,
+				DualStack:     true,
+				SASLMechanism: mechanism,
+				ClientID:      consumerConfig.Name,
+			}
+			consumerInternalConfigs.Dialer = dialer
+
+		default: // "PLAINTEXT"
+			consumerInternalConfigs.Dialer = &kafka.Dialer{}
+		}
+
+		for i := 0; i < consumerInternalConfigs.WorkersInPool; i++ {
+			consumerEnvelope, err := rateenvelopequeue.NewEnvelope(
+				// интервал не важен, т.к. задача будет выполняться сразу после взятия из пула. Важно что так включается
+				//режим периодического выполнения, который управляет перезапуском воркера после ребаланса вызванного изнутри
+				rateenvelopequeue.WithScheduleModeInterval(time.Duration(consumerConfig.RebalanceInterval)), // время не важно, т.к это интервал для первого запуска и перезапуска при ребалансе
+				rateenvelopequeue.WithInvoke(
+					func(ctx context.Context, envelope *rateenvelopequeue.Envelope) error {
+						consumer := kafka2.NewKafkaConsumer(
+							consumerInternalConfigs,
+							func(ctx context.Context, messages []kafka.Message) error {
+								logger.WriteInfoLog(ctx, &logger_wrapper.LogEntry{
+									Msg:       fmt.Sprintf("Processing %d messages", len(messages)),
+									Component: "kafka-reader",
+									Method:    "messageHandler",
+								})
+
+								err := handler(ctx, messages)
+								if err != nil {
+									logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
+										Msg:       "Handler returned error",
+										Component: "kafka-reader",
+										Method:    "messageHandler",
+										Error:     err,
+									})
+									return err
+								}
+
+								return nil
+							},
+						)
+						// для проверки ребаланса можно включить таймаут. И после него оркестратор перезапустит воркер
+						//ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+						//defer cancel()
+						consumer.Run(ctx)
+
+						return nil
+					},
+				),
+			)
+
+			if err != nil {
+				panic(err)
+			}
+			err = orchestrator.Send(consumerEnvelope)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+
+	return orchestrator, restart
+}
+
+func InitKafkaProducerPlaintext(ctx context.Context, app *application.App, producerCfg config.Producer, pool *sync.Pool) kafka2.Producer {
+	transport := &kafka.Transport{}
+	w := &kafka.Writer{
+		Transport:              transport, // Plaintext
+		Addr:                   kafka.TCP(producerCfg.Brokers...),
+		MaxAttempts:            producerCfg.WriteConfigs.Attempts,                                                           // ретрай на случай REBALANCE/NOT_LEADER
+		Balancer:               &kafka.Hash{},                                                                               // <-- round-robin по партициям
+		Async:                  producerCfg.WriteConfigs.Async,                                                              // синхронная запись
+		RequiredAcks:           kafka.RequireOne,                                                                            // дождаться коммита у лидера, фалловеров игнориуем
+		BatchBytes:             producerCfg.WriteConfigs.BatchBytes,                                                         // 10 MiB
+		BatchTimeout:           producerCfg.WriteConfigs.BatchTimeout,                                                       // макс задержка перед отправкой пачки
+		BatchSize:              producerCfg.WriteConfigs.BatchSize,                                                          // макс кол-во сообщений в пачке
+		AllowAutoTopicCreation: producerCfg.WriteConfigs.AllowAutoTopicCreation,                                             // полезно в prod
+		Compression:            kafka.Zstd,                                                                                  // сжатие
+		WriteTimeout:           producerCfg.WriteConfigs.WriteTimeout,                                                       // таймаут записи
+		ReadTimeout:            producerCfg.WriteConfigs.ReadTimeout,                                                        // таймаут чтения
+		ErrorLogger:            log.New(os.Stderr, producerCfg.WriteConfigs.ErrorLoggerLabel, log.LstdFlags|log.Lshortfile), // логгер ошибок
+		Logger:                 log.New(io.Discard, "", 0),                                                                  // логгер событий (обычно не нужен)
+	}
+	app.RegisterShutdown(producerCfg.WriteConfigs.ErrorLoggerLabel, func() {
+		err := w.Close()
+		if err != nil {
+			logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
+				Msg:       "failed to close kafka writer",
+				Component: "kafka",
+				Method:    "InitKafkaProducer",
+				Error:     err,
+			})
+		}
+		return
+	}, application.HighPriority)
+
+	mappers := make([]kafka2.TopicMapper, 0, len(producerCfg.Topic))
+	for _, topic := range producerCfg.Topic {
+		mappers = append(mappers, kafka2.TopicMapper{
+			OfficeID: topic.OfficeID,
+			Topic:    topic.Topic,
+		})
+	}
+
+	wrappedWriter := kafka2.NewWriterWrapper(w, mappers, producerCfg.Type, producerCfg.Name, producerCfg.Entity, pool, producerCfg.Brokers, nil)
+	err := wrappedWriter.Ping(ctx)
+	if err != nil {
+		logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
+			Msg:       "failed to ping kafka writer",
+			Component: "kafka",
+			Method:    "InitKafkaProducerPlaintext",
+			Error:     err,
+		})
+	}
+
+	return wrappedWriter
+}
+
+func InitKafkaProducerSasl(ctx context.Context, app *application.App, producerCfg config.Producer, pool *sync.Pool) kafka2.Producer {
+	var transport *kafka.Transport
+	switch producerCfg.WriteConfigs.Auth.Mechanism {
+	case "SASL_PLAINTEXT_SHA256":
+		mech, err := scram.Mechanism(scram.SHA256, producerCfg.WriteConfigs.Auth.Login, producerCfg.WriteConfigs.Auth.Password)
+		if err != nil {
+			log.Fatalf("scram mechanism: %v", err)
+		}
+		transport = &kafka.Transport{
+			SASL: mech,
+		}
+	default:
+		logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
+			Msg:       "unsupported kafka sasl mechanism",
+			Component: "kafka",
+			Method:    "InitKafkaProducerSasl",
+			Error:     fmt.Errorf("unsupported kafka sasl mechanism: %s", producerCfg.WriteConfigs.Auth.Mechanism),
+		})
+		panic("unsupported kafka sasl mechanism")
+	}
+
+	w := &kafka.Writer{
+		Transport:   transport,
+		Addr:        kafka.TCP(producerCfg.Brokers...),
+		MaxAttempts: producerCfg.WriteConfigs.Attempts, // ретрай на случай REBALANCE/NOT_LEADER
+		//Balancer:    &kafka.RoundRobin{}, // round-robin по партициям, плохо балансирует
+		//Balancer:               &kafka.LeastBytes{},                                                                         // находит минимально загруженную партицию на клиентной стороне
+		Balancer:               &kafka.Hash{},                                                                               // один и тот же ключ у продюсеоа попадает в одну и ту же партицию
+		Async:                  producerCfg.WriteConfigs.Async,                                                              // синхронная запись
+		RequiredAcks:           kafka.RequireOne,                                                                            // дождаться коммита у лидера, фалловеров игнориуем
+		BatchBytes:             producerCfg.WriteConfigs.BatchBytes,                                                         // 10 MiB
+		BatchTimeout:           producerCfg.WriteConfigs.BatchTimeout,                                                       // макс задержка перед отправкой пачки
+		BatchSize:              producerCfg.WriteConfigs.BatchSize,                                                          // макс кол-во сообщений в пачке
+		AllowAutoTopicCreation: producerCfg.WriteConfigs.AllowAutoTopicCreation,                                             // полезно в prod
+		Compression:            kafka.Zstd,                                                                                  // сжатие
+		WriteTimeout:           producerCfg.WriteConfigs.WriteTimeout,                                                       // таймаут записи
+		ReadTimeout:            producerCfg.WriteConfigs.ReadTimeout,                                                        // таймаут чтения
+		ErrorLogger:            log.New(os.Stderr, producerCfg.WriteConfigs.ErrorLoggerLabel, log.LstdFlags|log.Lshortfile), // логгер ошибок
+		Logger:                 log.New(io.Discard, "", 0),                                                                  // логгер событий (обычно не нужен)
+	}
+
+	app.RegisterShutdown(producerCfg.WriteConfigs.ErrorLoggerLabel, func() {
+		err := w.Close()
+		if err != nil {
+			logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
+				Msg:       "failed to close kafka writer",
+				Component: "kafka",
+				Method:    "InitKafkaProducer",
+				Error:     err,
+			})
+		}
+		return
+	}, application.HighPriority)
+
+	mappers := make([]kafka2.TopicMapper, 0, len(producerCfg.Topic))
+	for _, topic := range producerCfg.Topic {
+		mappers = append(mappers, kafka2.TopicMapper{
+			OfficeID: topic.OfficeID,
+			Topic:    topic.Topic,
+		})
+	}
+
+	wrappedWriter := kafka2.NewWriterWrapper(w, mappers, producerCfg.Type, producerCfg.Name, producerCfg.Entity, pool, producerCfg.Brokers, transport)
+	err := wrappedWriter.Ping(ctx)
+	if err != nil {
+		logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
+			Msg:       "failed to ping kafka writer",
+			Component: "kafka",
+			Method:    "InitKafkaProducerSasl",
+			Error:     err,
+		})
+	}
+
+	return wrappedWriter
+}
+
+func InitPartitionedWriters(parent context.Context, custom *metrics.Metrics, app *application.App, cfg *config.Config) ([]kafka2.Producer, []kafka2.Producer) {
+	var (
+		shardWriters []kafka2.Producer
+		mainWriters  []kafka2.Producer
+	)
+
+	switch {
+	case config.IsProdEnv(cfg.Application.TestEnv) || config.IsStageEnv(cfg.Application.TestEnv):
+		for _, producerConfig := range cfg.Kafka.Producers {
+			writer := InitKafkaProducerSasl(
+				parent, app, producerConfig,
+				&sync.Pool{
+					New: func() any {
+						return make([]kafka.Message, 0, kafka2.DoubleMultiplePool(producerConfig.WriteConfigs.BatchSize))
+					},
+				},
+			)
+			switch producerConfig.Type {
+			case kafka2.ShardProducer:
+				shardWriters = append(shardWriters, writer)
+			case kafka2.MainProducer:
+				mainWriters = append(mainWriters, writer)
+			}
+		}
+	case config.IsLocalEnv(cfg.Application.TestEnv):
+		for _, producerConfig := range cfg.Kafka.Producers {
+			writer := InitKafkaProducerPlaintext(
+				parent, app, producerConfig,
+				&sync.Pool{
+					New: func() any {
+						return make([]kafka.Message, 0, kafka2.DoubleMultiplePool(producerConfig.WriteConfigs.BatchSize))
+					},
+				},
+			)
+			switch producerConfig.Type {
+			case kafka2.ShardProducer:
+				shardWriters = append(shardWriters, writer)
+			case kafka2.MainProducer:
+				mainWriters = append(mainWriters, writer)
+			}
+		}
+	}
+
+	return mainWriters, shardWriters
+}
+
+func InitMetrics() (*prometheus.Registry, *metrics.Metrics) {
+	registry := prometheus.NewRegistry()
+	custom := metrics.NewMetrics()
+
+	registry.MustRegister(
+		collectors.NewGoCollector(
+			collectors.WithGoCollectorRuntimeMetrics(
+				collectors.GoRuntimeMetricsRule{
+					Matcher: regexp.MustCompile(".*"),
+				},
+			),
+		),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{
+			Namespace: metrics.Namespace,
+		}),
+		custom.RequestsTotal,
+		metrics.HttpRequests,
+		metrics.HttpDuration,
+	)
+
+	return registry, custom
 }

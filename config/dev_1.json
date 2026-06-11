@@ -6,11 +6,11 @@
     "is_cloud_logging" : false
   },
   "simple_server": {
-    "addr": ":9007",
+    "addr": ":7007",
     "need_profiler": true
   },
   "server_http": {
-    "addr": ":9000",
+    "addr": ":7000",
     "request_timeout": "15s",
     "pre_shutdown_state" : {
       "need": true,
@@ -24,7 +24,7 @@
     "max_header_bytes": 2097152
   },
   "server": {
-    "addr": ":9009",
+    "addr": ":7009",
     "network": "tcp",
     "reflection_enabled": true,
     "out_grpc_body_size": 32,

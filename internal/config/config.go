@@ -10,6 +10,7 @@ import (
 	"time"
 
 	clickhouse2 "github.com/PavelAgarkov/service-pkg/database/clickhouse"
+
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -31,6 +32,21 @@ type Config struct {
 	Clickhouse            clickhouse2.Clickhouse `mapstructure:"clickhouse"     envconfig:"CLICKHOUSE"`
 	Redis                 RedisConfig            `mapstructure:"redis"          envconfig:"REDIS"`
 	SimpleServer          SimpleServer           `mapstructure:"simple_server"  envconfig:"SIMPLE_SERVER"`
+	ServerHttp            ServerHttp             `mapstructure:"server_http"    envconfig:"SERVER_HTTP"`
+	Scheduler             Scheduler              `mapstructure:"scheduler"              envconfig:"SCHEDULER"`
+	Kafka                 Kafka                  `mapstructure:"kafka"                   envconfig:"KAFKA"`
+	MongoDBPool           MongoDB                `mapstructure:"mongodb_pool"            envconfig:"MONGODB_POOL"`
+}
+
+type MongoDB struct {
+	URI               string        `mapstructure:"uri"                       envconfig:"URI"`
+	DB                string        `mapstructure:"database"                  envconfig:"DATABASE"`
+	AppName           string        `mapstructure:"app_name"                 envconfig:"APP_NAME"`
+	MaxPoolSize       uint64        `mapstructure:"max_pool_size"            envconfig:"MAX_POOL_SIZE"`
+	MinPoolSize       uint64        `mapstructure:"min_pool_size"            envconfig:"MIN_POOL_SIZE"`
+	MaxConnIdleTime   time.Duration `mapstructure:"max_conn_idle_time"       envconfig:"MAX_CONN_IDLE_TIME"`
+	ServerSelectionTO time.Duration `mapstructure:"server_selection_timeout" envconfig:"SERVER_SELECTION_TIMEOUT"`
+	ConnectTimeout    time.Duration `mapstructure:"connect_timeout"          envconfig:"CONNECT_TIMEOUT"`
 }
 
 type BadgerDBMaster struct {
@@ -50,6 +66,7 @@ type BadgerDBMaster struct {
 }
 
 type ApplicationConfig struct {
+	TestEnv                  string        `mapstructure:"test_env"                   envconfig:"TEST_ENV"`
 	HeapOverflow             int           `mapstructure:"heap_overflow" envconfig:"HEAP_OVERFLOW"`
 	Cores                    int           `mapstructure:"cores"                      envconfig:"CORES"`
 	ClickhouseRate           int           `mapstructure:"clickhouse_out_rate"       envconfig:"CLICKHOUSE_OUT_RATE"`
@@ -69,7 +86,113 @@ type Core struct {
 }
 
 type SimpleServer struct {
-	Addr string `mapstructure:"addr"               envconfig:"ADDR"`
+	Addr         string `mapstructure:"addr"               envconfig:"ADDR"`
+	NeedProfiler bool   `mapstructure:"need_profiler"     envconfig:"NEED_PROFILER"`
+}
+
+type Scheduler struct {
+	Name       string     `mapstructure:"name"           envconfig:"NAME"`
+	WorkerPool int        `mapstructure:"worker_pool"     envconfig:"WORKER_POOL"`
+	Schedule   []Schedule `mapstructure:"schedule"       envconfig:"SCHEDULE"`
+}
+
+type Schedule struct {
+	Name string        `mapstructure:"name" envconfig:"NAME"`
+	Time time.Duration `mapstructure:"time" envconfig:"TIME"`
+}
+
+type Kafka struct {
+	Consumers map[string]Consumer `mapstructure:"consumers" envconfig:"CONSUMERS"`
+	Producers map[string]Producer `mapstructure:"producers" envconfig:"PRODUCERS"`
+}
+
+type Producer struct {
+	Name         string       `mapstructure:"name"    envconfig:"NAME"`
+	Type         string       `mapstructure:"type"    envconfig:"TYPE"`
+	Entity       string       `mapstructure:"entity"  envconfig:"ENTITY"`
+	Brokers      []string     `mapstructure:"brokers" envconfig:"BROKERS"`
+	Topic        []Topic      `mapstructure:"topic"  envconfig:"TOPIC"`
+	WriteConfigs WriteConfigs `mapstructure:"write_configs" envconfig:"WRITE_CONFIGS"`
+}
+
+type WriteConfigs struct {
+	Auth                   Auth          `mapstructure:"auth"                        envconfig:"AUTH"`
+	Attempts               int           `mapstructure:"attempts"                    envconfig:"ATTEMPTS"`
+	Async                  bool          `mapstructure:"async"                       envconfig:"ASYNC"`
+	BatchBytes             int64         `mapstructure:"batch_bytes"                 envconfig:"BATCH_BYTES"`
+	BatchTimeout           time.Duration `mapstructure:"batch_timeout"               envconfig:"BATCH_TIMEOUT"`
+	BatchSize              int           `mapstructure:"batch_size"                  envconfig:"BATCH_SIZE"`
+	AllowAutoTopicCreation bool          `mapstructure:"allow_auto_topic_creation"   envconfig:"ALLOW_AUTO_TOPIC_CREATION"`
+	WriteTimeout           time.Duration `mapstructure:"write_timeout"               envconfig:"WRITE_TIMEOUT"`
+	ReadTimeout            time.Duration `mapstructure:"read_timeout"                envconfig:"READ_TIMEOUT"`
+	ErrorLoggerLabel       string        `mapstructure:"error_logger_label"                envconfig:"LOGGER_LABEL"`
+}
+
+type Consumer struct {
+	Name              string        `mapstructure:"name"           envconfig:"NAME"`
+	Brokers           []string      `mapstructure:"brokers"        envconfig:"BROKERS"`
+	Topic             []Topic       `mapstructure:"topic"          envconfig:"TOPIC"`
+	WorkerPool        int           `mapstructure:"worker_pool"    envconfig:"WORKER_POOL"`
+	ReadConfigs       ReadConfigs   `mapstructure:"read_configs"  envconfig:"READ_CONFIGS"`
+	RebalanceInterval time.Duration `mapstructure:"rebalance_interval" envconfig:"REBALANCE_INTERVAL"`
+}
+
+type Auth struct {
+	Mechanism string `mapstructure:"mechanism" envconfig:"MECHANISM"`
+	Login     string `mapstructure:"login"     envconfig:"LOGIN"`
+	Password  string `mapstructure:"password"  envconfig:"PASSWORD"`
+}
+type ReadConfigs struct {
+	Auth              Auth          `mapstructure:"auth"           envconfig:"AUTH"`
+	GroupID           string        `mapstructure:"group_id"      envconfig:"GROUP_ID"`
+	BatchSize         int           `mapstructure:"batch_size"    envconfig:"BATCH_SIZE"`
+	BatchDeadline     time.Duration `mapstructure:"batch_deadline" envconfig:"BATCH_DEADLINE"`
+	MinBytes          int           `mapstructure:"min_bytes"     envconfig:"MIN_BYTES"`
+	MaxBytes          int           `mapstructure:"max_bytes"     envconfig:"MAX_BYTES"`
+	CommitInterval    time.Duration `mapstructure:"commit_interval" envconfig:"COMMIT_INTERVAL"`
+	SessionTimeout    time.Duration `mapstructure:"session_timeout" envconfig:"SESSION_TIMEOUT"`
+	HeartbeatInterval time.Duration `mapstructure:"heartbeat_interval" envconfig:"HEARTBEAT_INTERVAL"`
+	RebalanceTimeout  time.Duration `mapstructure:"rebalance_timeout" envconfig:"REBALANCE_TIMEOUT"`
+	MaxWait           time.Duration `mapstructure:"max_wait"      envconfig:"MAX_WAIT"`
+	QueueCapacity     int           `mapstructure:"queue_capacity" envconfig:"QUEUE_CAPACITY"`
+	ReaderDownTimeout time.Duration `mapstructure:"reader_down_timeout" envconfig:"READER_DOWN_TIMEOUT"`
+}
+
+type Topic struct {
+	Topic    string `mapstructure:"topic"    envconfig:"TOPIC"`
+	OfficeID int64  `mapstructure:"office_id" envconfig:"OFFICE_ID"`
+}
+
+//"server": {
+//"addr": ":9000",
+//"request_timeout": "15s",
+//"pre_shutdown_state" : {
+//"need": true,
+//"draining_timeout": "5s",
+//"shutdown_timeout": "5s"
+//},
+//"read_timeout": "15s",
+//"write_timeout": "10s",
+//"idle_timeout": "300s",
+//"read_header_timeout": "1s",
+//"max_header_bytes": 2097152
+//},
+
+type ServerHttp struct {
+	Addr              string           `mapstructure:"addr"               envconfig:"ADDR"`
+	RequestTimeout    time.Duration    `mapstructure:"request_timeout"    envconfig:"REQUEST_TIMEOUT"`
+	PreShutdownState  PreShutdownState `mapstructure:"pre_shutdown_state" envconfig:"PRE_SHUTDOWN_STATE"`
+	ReadTimeout       time.Duration    `mapstructure:"read_timeout"       envconfig:"READ_TIMEOUT"`
+	WriteTimeout      time.Duration    `mapstructure:"write_timeout"      envconfig:"WRITE_TIMEOUT"`
+	IdleTimeout       time.Duration    `mapstructure:"idle_timeout"       envconfig:"IDLE_TIMEOUT"`
+	ReadHeaderTimeout time.Duration    `mapstructure:"read_header_timeout" envconfig:"READ_HEADER_TIMEOUT"`
+	MaxHeaderBytes    int              `mapstructure:"max_header_bytes"   envconfig:"MAX_HEADER_BYTES"`
+}
+
+type PreShutdownState struct {
+	Need            bool          `mapstructure:"need"              envconfig:"NEED"`
+	TimeForDraining time.Duration `mapstructure:"draining_timeout"  envconfig:"DRAINING_TIMEOUT"`
+	TimeForShutdown time.Duration `mapstructure:"shutdown_timeout"  envconfig:"SHUTDOWN_TIMEOUT"`
 }
 
 type Server struct {
@@ -216,4 +339,31 @@ func decode(m map[string]any) (*Config, error) {
 		return nil, fmt.Errorf("decode config: %w", err)
 	}
 	return dc.Result.(*Config), nil
+}
+
+func IsLocalEnv(val string) bool {
+	if val == "" {
+		return true
+	}
+	val = strings.ToLower(val)
+
+	return val == "dev" || val == "local" || val == "test"
+}
+
+func IsStageEnv(val string) bool {
+	if val == "" {
+		return false
+	}
+	val = strings.ToLower(val)
+
+	return val == "stage" || val == "staging"
+}
+
+func IsProdEnv(val string) bool {
+	if val == "" {
+		return false
+	}
+	val = strings.ToLower(val)
+
+	return val == "prod" || val == "production"
 }

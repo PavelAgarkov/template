@@ -2,7 +2,6 @@ package v1
 
 import (
 	"context"
-
 	"github.com/PavelAgarkov/template/internal/models/pg_model"
 	pb "github.com/PavelAgarkov/template/protobuf/cloud-template/v1"
 

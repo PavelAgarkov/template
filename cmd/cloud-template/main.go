@@ -13,31 +13,27 @@ import (
 	"github.com/PavelAgarkov/template/internal/service"
 	"github.com/PavelAgarkov/template/internal/service/autorization"
 	"github.com/PavelAgarkov/template/internal/service/command_bus"
+	api2 "github.com/PavelAgarkov/template/internal/service/kafka/api"
+	"github.com/PavelAgarkov/template/internal/service/kafka/handler"
 	"github.com/PavelAgarkov/template/internal/service/nomenclature"
 	"github.com/PavelAgarkov/template/internal/service/readiness"
+	"github.com/PavelAgarkov/template/internal/service/scheduler"
+	"github.com/PavelAgarkov/template/pkg/kafka/proxy_loader"
+	"github.com/PavelAgarkov/template/pkg/mongo_db"
 	cloudtemplatepbv1 "github.com/PavelAgarkov/template/protobuf/cloud-template/v1"
 
 	"github.com/PavelAgarkov/service-pkg/application"
-	lock "github.com/PavelAgarkov/service-pkg/locker"
+	locker2 "github.com/PavelAgarkov/service-pkg/locker"
+	loggerwrapper "github.com/PavelAgarkov/service-pkg/logger"
+	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
 	"github.com/PavelAgarkov/service-pkg/readiness_barrier"
 	scheduler2 "github.com/PavelAgarkov/service-pkg/scheduler"
 	grpcserver "github.com/PavelAgarkov/service-pkg/server"
 	"github.com/PavelAgarkov/service-pkg/utils"
 	"github.com/PavelAgarkov/service-pkg/watchdog"
+
 	"google.golang.org/grpc"
 )
-
-//func init() {
-//	go func() {
-//		mux := http.NewServeMux()
-//		mux.HandleFunc("/debug/pprof/", pprof.Index)
-//		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-//		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-//		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-//		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-//		_ = http.ListenAndServe("127.0.0.1:6060", mux)
-//	}()
-//}
 
 func main() {
 	baseCtx, cancel := context.WithCancel(context.Background())
@@ -57,6 +53,31 @@ func main() {
 
 	defer app.Stop()
 	defer app.RegisterRecovers()()
+
+	mongoPool, err := mongo_db.New(baseCtx, mongo_db.Config{
+		URI:               cfg.MongoDBPool.URI,
+		DB:                cfg.MongoDBPool.DB,
+		AppName:           cfg.MongoDBPool.AppName,
+		MaxPoolSize:       cfg.MongoDBPool.MaxPoolSize,
+		MinPoolSize:       cfg.MongoDBPool.MinPoolSize,
+		MaxConnIdleTime:   cfg.MongoDBPool.MaxConnIdleTime,
+		ServerSelectionTO: cfg.MongoDBPool.ServerSelectionTO,
+		ConnectTimeout:    cfg.MongoDBPool.ConnectTimeout,
+	})
+	if err != nil {
+		panic(err)
+	}
+	app.RegisterShutdown("mongodb.pool", func() {
+		err := mongoPool.Close(baseCtx)
+		if err != nil {
+			logger.WriteErrorLog(context.Background(), &loggerwrapper.LogEntry{
+				Msg:       "Failed to close mongo pool",
+				Component: "mongo_db_pool",
+				Method:    "Close",
+				Error:     err,
+			})
+		}
+	}, application.LowestPriority)
 
 	postgresRepository := container.InitPostgres(baseCtx, app, cfg.PostgresMaster, cfg.PostgresAsyncReplicas, cfg.PostgresSyncReplicas)
 	redisClient := container.InitRedisClient(baseCtx, app, cfg.Redis)
@@ -160,14 +181,6 @@ func main() {
 		panic("Failed to add pullConsumer job: " + err.Error())
 	}
 
-	locker := lock.NewLocker(redisClient)
-	wdog := watchdog.NewRedisWatchdogLeader(baseCtx, locker)
-	app.RegisterShutdown("watchdog", wdog.Stop, application.ImmediatePriority)
-	container.InitCron(app, wdog, cron)
-	container.InitClickhouseBusher(baseCtx, app, wdog, nomenclatureConsumer)
-	app.StartWatchdogsLeadership()
-	container.InitScheduler(baseCtx, app, commandBusConsumer, pullConsumer)
-
 	container.InitGrpcServer(
 		baseCtx, app, cfg.Server,
 		func(s *grpc.Server) {
@@ -181,10 +194,53 @@ func main() {
 		},
 	)
 	clickHouseRepository := container.InitOrderClickhouse(baseCtx, app, cfg.Clickhouse)
+
+	scheduleService := scheduler.NewService()
+
+	shkOnPlaceConsumerConfig, ok := cfg.Kafka.Consumers["shk_on_place_consumer"]
+	if !ok {
+		panic("Failed to find kafka consumers config")
+	}
+	tareMoveConsumerConfig, ok := cfg.Kafka.Consumers["tare_move_consumer"]
+	if !ok {
+		panic("Failed to find kafka consumers config")
+	}
+
+	shkOnPlaceHandler := handler.NewShkOnPlaceHandler().Handle
+
+	tareHandler := handler.NewTareMoveHandler().Handle
+
+	goodsConsumerPool, restartGoodsConsumerPool := container.InitTopicConsumerPool(
+		baseCtx, app, shkOnPlaceConsumerConfig, shkOnPlaceHandler)
+
+	tareConsumerPool, restartTareConsumerPool := container.InitTopicConsumerPool(baseCtx, app, tareMoveConsumerConfig,
+		tareHandler)
+
+	consumerController := api2.NewConsumerController(
+		goodsConsumerPool, tareConsumerPool,
+		restartGoodsConsumerPool, restartTareConsumerPool,
+	)
+
+	schedule := container.InitRoboScheduler(baseCtx, app, cfg.Scheduler, scheduleService)
+
+	locker := locker2.NewLocker(redisClient)
+	wdog := watchdog.NewRedisWatchdogLeader(baseCtx, locker)
+	app.RegisterShutdown("watchdog", wdog.Stop, application.ImmediatePriority)
+	container.InitOrchestrator(app, wdog, schedule)
+	app.StartWatchdogsLeadership()
+
+	orchestratorPool := service.NewOrchestratorPool([]func(){restartGoodsConsumerPool, restartTareConsumerPool})
+	orchestratorPool.Start()
+	app.RegisterShutdown("orchestrator.pool", func() { orchestratorPool.Stop() }, application.ImmediatePriority)
+
+	_, metrics := container.InitMetrics()
+	mainProducers, shardProducers := container.InitPartitionedWriters(baseCtx, metrics, app, cfg)
+	proxyLoader := proxy_loader.NewProxyLoader(metrics, mainProducers, shardProducers) // делайте свои способы записи в продюсеры
+	proxy := api2.NewProxyAPI(metrics, proxyLoader)
+
 	readinessService := readiness.NewService(redisClient, postgresRepository, clickHouseRepository)
-	//container.InitGorillaHttpServer(baseCtx, app, cfg.SimpleServer, live)
-	//container.InitSimpleServer(baseCtx, app, cfg.SimpleServer, live)
-	container.InitChiHTTPServer(baseCtx, app, cfg.SimpleServer, readinessService)
+	container.InitSimpleServer(baseCtx, app, cfg.SimpleServer, readinessService, consumerController)
+	container.InitChiHTTPServer(baseCtx, app, cfg.ServerHttp, readinessService, proxy)
 
 	app.Run()
 }

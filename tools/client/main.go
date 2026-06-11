@@ -6,8 +6,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/PavelAgarkov/template/internal/service/autorization"
-	pb "github.com/PavelAgarkov/template/protobuf/cloud-template/v1"
+	"cloud-template/internal/service/autorization"
+	pb "cloud-template/protobuf/cloud-template/v1"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -37,10 +37,10 @@ func main() {
 	builder := manual.NewBuilderWithScheme(scheme)
 	builder.InitialState(resolver.State{
 		Addresses: []resolver.Address{
-			//http://github.com/PavelAgarkov/template.whs-ai.k8s.prod-xc
-			{Addr: "github.com/PavelAgarkov/template.whs-ai.k8s.prod-xc:82"},
-			//http://github.com/PavelAgarkov/template.whs-ai.k8s.prod-el
-			{Addr: "github.com/PavelAgarkov/template.whs-ai.k8s.prod-el:82"},
+			//http://cloud-template.whs-ai.k8s.prod-xc
+			{Addr: "cloud-template.whs-ai.k8s.prod-xc:82"},
+			//http://cloud-template.whs-ai.k8s.prod-el
+			{Addr: "cloud-template.whs-ai.k8s.prod-el:82"},
 		},
 	})
 
@@ -52,7 +52,7 @@ func main() {
 
 	pool := mem.NewTieredBufferPool(128<<10, 512<<10, 1<<20, 4<<20, 8<<20)
 	conn, err := grpc.NewClient(
-		fmt.Sprintf("%s:///github.com/PavelAgarkov/template", scheme),
+		fmt.Sprintf("%s:///cloud-template", scheme),
 		grpc.WithResolvers(builder),
 		grpc.WithDefaultServiceConfig(
 			`{
