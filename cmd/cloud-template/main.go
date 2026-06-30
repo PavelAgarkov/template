@@ -23,7 +23,7 @@ import (
 	"github.com/PavelAgarkov/template/pkg/mongo_db"
 	cloudtemplatepbv1 "github.com/PavelAgarkov/template/protobuf/cloud-template/v1"
 
-	"github.com/PavelAgarkov/service-pkg/application"
+	"github.com/PavelAgarkov/service-pkg/kernel"
 	locker2 "github.com/PavelAgarkov/service-pkg/locker"
 	"github.com/PavelAgarkov/service-pkg/readiness_barrier"
 	scheduler2 "github.com/PavelAgarkov/service-pkg/scheduler"
@@ -43,7 +43,7 @@ func main() {
 		panic("Failed to load configuration: " + err.Error())
 	}
 
-	app := application.NewApp(baseCtx, cfg.Application.Cores, cfg.Application.HeapOverflow)
+	app := kernel.NewDefaultKernel(baseCtx, cfg.Application.Cores, cfg.Application.HeapOverflow)
 	app.Start(cancel)
 
 	defer app.Stop()
@@ -67,7 +67,7 @@ func main() {
 		if err != nil {
 			log.Printf("Failed to close mongo pool: %v\n", err)
 		}
-	}, application.LowestPriority)
+	}, kernel.LowestPriority)
 
 	postgresRepository := container.InitPostgres(baseCtx, app, cfg.PostgresMaster, cfg.PostgresAsyncReplicas, cfg.PostgresSyncReplicas)
 	redisClient := container.InitRedisClient(baseCtx, app, cfg.Redis)
@@ -75,7 +75,7 @@ func main() {
 
 	authorizingRepository := postgres.NewAuthorizationRepository(postgresRepository)
 	authorizationService := autorization.NewService(baseCtx, authorizingRepository)
-	app.RegisterShutdown("authorization-service", authorizationService.Stop, application.HighestPriority)
+	app.RegisterShutdown("authorization-service", authorizationService.Stop, kernel.HighestPriority)
 
 	nomenclatureTopicRepository := postgres.NewNomenclatureTopicRepository(postgresRepository)
 	nomenclatureTopicService := nomenclature.NewNomenclatureTopicService(transactionManager, nomenclatureTopicRepository)
@@ -100,13 +100,13 @@ func main() {
 		Name: "shepherd-cache-goods-v1",
 	})
 	barrierShepherdGoodsApiImplementationV1.Start()
-	app.RegisterShutdown("readiness_barrier-shepherd-cache-goods-v1", barrierShepherdGoodsApiImplementationV1.Stop, application.ImmediatePriority)
+	app.RegisterShutdown("readiness_barrier-shepherd-cache-goods-v1", barrierShepherdGoodsApiImplementationV1.Stop, kernel.ImmediatePriority)
 
 	barrierShepherdGoodsApiImplementationV2 := readiness_barrier.NewReadinessBarrier(baseCtx, readiness_barrier.ReadinessBarrierConfig{
 		Name: "shepherd-cache-goods-v2",
 	})
 	barrierShepherdGoodsApiImplementationV2.Start()
-	app.RegisterShutdown("readiness_barrier-shepherd-cache-goods-v2", barrierShepherdGoodsApiImplementationV2.Stop, application.ImmediatePriority)
+	app.RegisterShutdown("readiness_barrier-shepherd-cache-goods-v2", barrierShepherdGoodsApiImplementationV2.Stop, kernel.ImmediatePriority)
 
 	num := 1
 	pullConsumer := scheduler2.NewJobScheduler(1)
@@ -215,13 +215,13 @@ func main() {
 
 	locker := locker2.NewLocker(redisClient)
 	wdog := watchdog.NewRedisWatchdogLeader(baseCtx, locker)
-	app.RegisterShutdown("watchdog", wdog.Stop, application.ImmediatePriority)
+	app.RegisterShutdown("watchdog", wdog.Stop, kernel.ImmediatePriority)
 	container.InitOrchestrator(app, wdog, schedule)
 	app.StartWatchdogsLeadership()
 
 	orchestratorPool := service.NewOrchestratorPool([]func(){restartGoodsConsumerPool, restartTareConsumerPool})
 	orchestratorPool.Start()
-	app.RegisterShutdown("orchestrator.pool", func() { orchestratorPool.Stop() }, application.ImmediatePriority)
+	app.RegisterShutdown("orchestrator.pool", func() { orchestratorPool.Stop() }, kernel.ImmediatePriority)
 
 	_, metrics := container.InitMetrics()
 	mainProducers, shardProducers := container.InitPartitionedWriters(baseCtx, metrics, app, cfg)

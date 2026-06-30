@@ -12,6 +12,8 @@ github.com/PavelAgarkov/service-pkg v0.0.0-20260611094502-538e16828711 h1:1CgXmR
 github.com/PavelAgarkov/service-pkg v0.0.0-20260611094502-538e16828711/go.mod h1:Ioy5eWU2vM4zYUjOqCV+W/ZrxHctbEnNMlUA4YhArUM=
 github.com/PavelAgarkov/service-pkg v0.0.0-20260630065147-45d1af60e390 h1:yLrEa9PmdS4iiybyJvwhy4IqyI5IaoBwslzb/xtAkQw=
 github.com/PavelAgarkov/service-pkg v0.0.0-20260630065147-45d1af60e390/go.mod h1:Ioy5eWU2vM4zYUjOqCV+W/ZrxHctbEnNMlUA4YhArUM=
+github.com/PavelAgarkov/service-pkg v0.0.0-20260630101847-e3faeba1fe99 h1:1kGJQiBXfMk+iGOBPgcdWvrYSTk84LrHu1nJOPL/LNw=
+github.com/PavelAgarkov/service-pkg v0.0.0-20260630101847-e3faeba1fe99/go.mod h1:Ioy5eWU2vM4zYUjOqCV+W/ZrxHctbEnNMlUA4YhArUM=
 github.com/andybalholm/brotli v1.2.0 h1:ukwgCxwYrmACq68yiUqwIWnGY0cTPox/M94sVwToPjQ=
 github.com/andybalholm/brotli v1.2.0/go.mod h1:rzTDkvFWvIrjDXZHkuS16NPggd91W3kUSvPlQ1pLaKY=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=

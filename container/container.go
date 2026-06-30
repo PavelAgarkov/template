@@ -34,9 +34,9 @@ import (
 	"github.com/segmentio/kafka-go/sasl/scram"
 	rateenvelopequeue "github.com/simplegear/rate-envelope-queue"
 
-	"github.com/PavelAgarkov/service-pkg/application"
 	clickhouse2 "github.com/PavelAgarkov/service-pkg/database/clickhouse"
 	postgres2 "github.com/PavelAgarkov/service-pkg/database/postgres"
+	"github.com/PavelAgarkov/service-pkg/kernel"
 	scheduler2 "github.com/PavelAgarkov/service-pkg/scheduler"
 	"github.com/PavelAgarkov/service-pkg/server"
 	"github.com/PavelAgarkov/service-pkg/watchdog"
@@ -52,7 +52,7 @@ import (
 
 func InitClickhouseBusher(
 	ctx context.Context,
-	app *application.App,
+	app *kernel.Kernel,
 	wdog watchdog.LeaderElectingWatchdog,
 	nomenclatureBlockScheduler scheduler2.JobSchedulerInterface,
 ) {
@@ -60,7 +60,7 @@ func InitClickhouseBusher(
 		ElectionName: watchdog.ClickhouseBusher,
 		Expiration:   watchdog.DefaultLeaderExpiration,
 	})
-	app.RegisterWatchdogsLeadership(&application.LeaderSupervisor{
+	app.RegisterWatchdogsLeadership(&kernel.LeaderSupervisor{
 		Stop:           nomenclatureBlockScheduler.Stop(),
 		Start:          nomenclatureBlockScheduler.Start(ctx),
 		Watchdog:       wdog,
@@ -69,7 +69,7 @@ func InitClickhouseBusher(
 	})
 }
 
-func InitOrchestrator(app *application.App, wdog watchdog.LeaderElectingWatchdog, orchestrator rateenvelopequeue.SingleQueuePool) {
+func InitOrchestrator(app *kernel.Kernel, wdog watchdog.LeaderElectingWatchdog, orchestrator rateenvelopequeue.SingleQueuePool) {
 	watcher := wdog.Elect(watchdog.Config{
 		ElectionName: watchdog.Cron,
 		Expiration:   watchdog.DefaultLeaderExpiration,
@@ -97,7 +97,7 @@ func InitOrchestrator(app *application.App, wdog watchdog.LeaderElectingWatchdog
 		orchestrator.Stop()
 	}
 
-	app.RegisterWatchdogsLeadership(&application.LeaderSupervisor{
+	app.RegisterWatchdogsLeadership(&kernel.LeaderSupervisor{
 		Stop:           stop,
 		Start:          start,
 		Watchdog:       wdog,
@@ -106,12 +106,12 @@ func InitOrchestrator(app *application.App, wdog watchdog.LeaderElectingWatchdog
 	})
 }
 
-func InitCron(app *application.App, wdog watchdog.LeaderElectingWatchdog, cron *scheduler2.Cron) {
+func InitCron(krl *kernel.Kernel, wdog watchdog.LeaderElectingWatchdog, cron *scheduler2.Cron) {
 	watcher := wdog.Elect(watchdog.Config{
 		ElectionName: watchdog.Cron,
 		Expiration:   watchdog.DefaultLeaderExpiration,
 	})
-	app.RegisterWatchdogsLeadership(&application.LeaderSupervisor{
+	krl.RegisterWatchdogsLeadership(&kernel.LeaderSupervisor{
 		Stop:           cron.Stop,
 		Start:          cron.Start,
 		Watchdog:       wdog,
@@ -120,13 +120,13 @@ func InitCron(app *application.App, wdog watchdog.LeaderElectingWatchdog, cron *
 	})
 }
 
-func InitScheduler(ctx context.Context, app *application.App, schedulers ...scheduler2.JobSchedulerInterface) {
+func InitScheduler(ctx context.Context, krl *kernel.Kernel, schedulers ...scheduler2.JobSchedulerInterface) {
 	supervisor := scheduler2.NewTaskSupervisor(schedulers)
 	supervisor.Start(ctx)
-	app.RegisterShutdown("scheduler_tasker", supervisor.Stop, application.ImmediatePriority)
+	krl.RegisterShutdown("scheduler_tasker", supervisor.Stop, kernel.ImmediatePriority)
 }
 
-func InitRedisClient(ctx context.Context, app *application.App, redisCfg config.RedisConfig) *redis.Client {
+func InitRedisClient(ctx context.Context, app *kernel.Kernel, redisCfg config.RedisConfig) *redis.Client {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     redisCfg.Address,
 		Username: redisCfg.Username,
@@ -141,12 +141,12 @@ func InitRedisClient(ctx context.Context, app *application.App, redisCfg config.
 		if err := redisClient.Close(); err != nil {
 			log.Printf("Failed to close Redis client: %v", err)
 		}
-	}, application.MediumPriority)
+	}, kernel.MediumPriority)
 
 	return redisClient
 }
 
-func InitPostgres(ctx context.Context, app *application.App, pgMasterCfg, pgAsyncReplicasCfg, pgSyncReplicasCfg config.Postgres) *postgres.Repository {
+func InitPostgres(ctx context.Context, krl *kernel.Kernel, pgMasterCfg, pgAsyncReplicasCfg, pgSyncReplicasCfg config.Postgres) *postgres.Repository {
 	postgresMaster := postgres2.NewPostgresConnection(
 		ctx,
 		postgres2.Configs{
@@ -165,7 +165,7 @@ func InitPostgres(ctx context.Context, app *application.App, pgMasterCfg, pgAsyn
 			MaxConnLifeTimeJitter: pgMasterCfg.MaxConnLifeTimeJitter,
 		},
 	)
-	app.RegisterShutdown("k8s_haproxy_pgsql_master", postgresMaster.Stop, application.HighPriority)
+	krl.RegisterShutdown("k8s_haproxy_pgsql_master", postgresMaster.Stop, kernel.HighPriority)
 
 	postgresAsyncReplicas := postgres2.NewPostgresConnection(
 		ctx,
@@ -185,7 +185,7 @@ func InitPostgres(ctx context.Context, app *application.App, pgMasterCfg, pgAsyn
 			MaxConnLifeTimeJitter: pgAsyncReplicasCfg.MaxConnLifeTimeJitter,
 		},
 	)
-	app.RegisterShutdown("k8s_haproxy_pgsql_replicaasync", postgresAsyncReplicas.Stop, application.HighPriority)
+	krl.RegisterShutdown("k8s_haproxy_pgsql_replicaasync", postgresAsyncReplicas.Stop, kernel.HighPriority)
 
 	postgresSyncReplicas := postgres2.NewPostgresConnection(
 		ctx,
@@ -205,7 +205,7 @@ func InitPostgres(ctx context.Context, app *application.App, pgMasterCfg, pgAsyn
 			MaxConnLifeTimeJitter: pgSyncReplicasCfg.MaxConnLifeTimeJitter,
 		},
 	)
-	app.RegisterShutdown("k8s_haproxy_pgsql_replicasync", postgresSyncReplicas.Stop, application.HighPriority)
+	krl.RegisterShutdown("k8s_haproxy_pgsql_replicasync", postgresSyncReplicas.Stop, kernel.HighPriority)
 
 	return postgres.NewPostgresRepository(
 		postgresMaster,
@@ -215,7 +215,7 @@ func InitPostgres(ctx context.Context, app *application.App, pgMasterCfg, pgAsyn
 	//return postgres.NewPostgresRepository(nil, nil)
 }
 
-func InitOrderClickhouse(ctx context.Context, app *application.App, cfg clickhouse2.Clickhouse) *clickhouse.Repository {
+func InitOrderClickhouse(ctx context.Context, krl *kernel.Kernel, cfg clickhouse2.Clickhouse) *clickhouse.Repository {
 	statisticOrderClickHouse, err := clickhouse2.NewClickhouseConnection(ctx, cfg)
 	if err != nil {
 		log.Fatalf("Failed to connect to ClickHouse: %v", err)
@@ -223,14 +223,14 @@ func InitOrderClickhouse(ctx context.Context, app *application.App, cfg clickhou
 	if statisticOrderClickHouse == nil {
 		return nil
 	}
-	app.RegisterShutdown("order_clickhouse", statisticOrderClickHouse.Shutdown(ctx), application.HighPriority)
+	krl.RegisterShutdown("order_clickhouse", statisticOrderClickHouse.Shutdown(ctx), kernel.HighPriority)
 
 	return clickhouse.NewClickhouseRepository(statisticOrderClickHouse.GetDB(), statisticOrderClickHouse)
 }
 
 func InitGrpcServer(
 	ctx context.Context,
-	app *application.App,
+	krl *kernel.Kernel,
 	serverCfg config.Server,
 	registerFunc func(s *grpc.Server),
 	unaryInterceptors []grpc.UnaryServerInterceptor,
@@ -270,10 +270,10 @@ func InitGrpcServer(
 			grpc.MaxRecvMsgSize(serverCfg.InGRPCBodySize * 1024 * 1024),
 		}...,
 	)
-	app.RegisterShutdown("grpc_server", stop, application.ImmediatePriority)
+	krl.RegisterShutdown("grpc_server", stop, kernel.ImmediatePriority)
 }
 
-func InitGorillaHttpServer(ctx context.Context, app *application.App, serverConfig config.SimpleServer, live *readiness.Service) {
+func InitGorillaHttpServer(ctx context.Context, krl *kernel.Kernel, serverConfig config.SimpleServer, live *readiness.Service) {
 	list := func(simple *server.HTTPServer) {
 		simple.Router.Handle("/liveness", http.HandlerFunc(
 			func(writer http.ResponseWriter, request *http.Request) {
@@ -307,10 +307,10 @@ func InitGorillaHttpServer(ctx context.Context, app *application.App, serverConf
 		server.RecoverMiddleware,
 		server.LoggingMiddleware,
 	)
-	app.RegisterShutdown("simple_server", simpleHttpServerShutdownFunctionHttp, application.ImmediatePriority)
+	krl.RegisterShutdown("simple_server", simpleHttpServerShutdownFunctionHttp, kernel.ImmediatePriority)
 }
 
-func InitSimpleServer(ctx context.Context, app *application.App, serverConfig config.SimpleServer, live *readiness.Service, consumerController api.ConsumerControllerInterface) {
+func InitSimpleServer(ctx context.Context, krl *kernel.Kernel, serverConfig config.SimpleServer, live *readiness.Service, consumerController api.ConsumerControllerInterface) {
 	router := func(mux *http.ServeMux, container *simpleServer.Container) {
 		if serverConfig.NeedProfiler {
 			mux.HandleFunc("/debug/pprof/", pprof.Index)
@@ -339,7 +339,7 @@ func InitSimpleServer(ctx context.Context, app *application.App, serverConfig co
 		Liveness: live,
 	}
 	simple := simpleServer.NewSimpleServer(ctx, container, router, serverConfig)
-	app.RegisterShutdown("simple_server", simple.Stop(10*time.Second), application.ImmediatePriority)
+	krl.RegisterShutdown("simple_server", simple.Stop(10*time.Second), kernel.ImmediatePriority)
 }
 
 // InitChiHTTPServer @title           github.com/PavelAgarkov/template Internal API
@@ -349,7 +349,7 @@ func InitSimpleServer(ctx context.Context, app *application.App, serverConfig co
 // @schemes         http
 func InitChiHTTPServer(
 	ctx context.Context,
-	app *application.App,
+	krl *kernel.Kernel,
 	serverCfg config.ServerHttp,
 	rediness *readiness.Service,
 	proxy api.Proxy,
@@ -416,10 +416,10 @@ func InitChiHTTPServer(
 		server.LoggerChiContextMiddleware(),
 		server.LoggingChiMiddleware, // убрать после отладки
 	)
-	app.RegisterShutdown("chi_http_server", shutdown, application.ImmediatePriority)
+	krl.RegisterShutdown("chi_http_server", shutdown, kernel.ImmediatePriority)
 }
 
-func InitRoboScheduler(parent context.Context, app *application.App, SchedulerCfg config.Scheduler, router scheduler.Contract) rateenvelopequeue.SingleQueuePool {
+func InitRoboScheduler(parent context.Context, krl *kernel.Kernel, SchedulerCfg config.Scheduler, router scheduler.Contract) rateenvelopequeue.SingleQueuePool {
 	orchestrator := rateenvelopequeue.NewRateEnvelopeQueue(
 		parent,
 		SchedulerCfg.Name,
@@ -462,7 +462,7 @@ func InitRoboScheduler(parent context.Context, app *application.App, SchedulerCf
 
 func InitTopicConsumerPool(
 	parent context.Context,
-	app *application.App,
+	krl *kernel.Kernel,
 	consumerConfig config.Consumer,
 	handler func(context.Context, []kafka.Message) error,
 ) (rateenvelopequeue.SingleQueuePool, func()) {
@@ -556,7 +556,7 @@ func InitTopicConsumerPool(
 	return orchestrator, restart
 }
 
-func InitKafkaProducerPlaintext(ctx context.Context, app *application.App, producerCfg config.Producer, pool *sync.Pool) kafka2.Producer {
+func InitKafkaProducerPlaintext(ctx context.Context, krl *kernel.Kernel, producerCfg config.Producer, pool *sync.Pool) kafka2.Producer {
 	transport := &kafka.Transport{}
 	w := &kafka.Writer{
 		Transport:              transport, // Plaintext
@@ -575,13 +575,13 @@ func InitKafkaProducerPlaintext(ctx context.Context, app *application.App, produ
 		ErrorLogger:            log.New(os.Stderr, producerCfg.WriteConfigs.ErrorLoggerLabel, log.LstdFlags|log.Lshortfile), // логгер ошибок
 		Logger:                 log.New(io.Discard, "", 0),                                                                  // логгер событий (обычно не нужен)
 	}
-	app.RegisterShutdown(producerCfg.WriteConfigs.ErrorLoggerLabel, func() {
+	krl.RegisterShutdown(producerCfg.WriteConfigs.ErrorLoggerLabel, func() {
 		err := w.Close()
 		if err != nil {
 			log.Printf("failed to close kafka writer: %v", err)
 		}
 		return
-	}, application.HighPriority)
+	}, kernel.HighPriority)
 
 	mappers := make([]kafka2.TopicMapper, 0, len(producerCfg.Topic))
 	for _, topic := range producerCfg.Topic {
@@ -600,7 +600,7 @@ func InitKafkaProducerPlaintext(ctx context.Context, app *application.App, produ
 	return wrappedWriter
 }
 
-func InitKafkaProducerSasl(ctx context.Context, app *application.App, producerCfg config.Producer, pool *sync.Pool) kafka2.Producer {
+func InitKafkaProducerSasl(ctx context.Context, krl *kernel.Kernel, producerCfg config.Producer, pool *sync.Pool) kafka2.Producer {
 	var transport *kafka.Transport
 	switch producerCfg.WriteConfigs.Auth.Mechanism {
 	case "SASL_PLAINTEXT_SHA256":
@@ -636,13 +636,13 @@ func InitKafkaProducerSasl(ctx context.Context, app *application.App, producerCf
 		Logger:                 log.New(io.Discard, "", 0),                                                                  // логгер событий (обычно не нужен)
 	}
 
-	app.RegisterShutdown(producerCfg.WriteConfigs.ErrorLoggerLabel, func() {
+	krl.RegisterShutdown(producerCfg.WriteConfigs.ErrorLoggerLabel, func() {
 		err := w.Close()
 		if err != nil {
 			log.Printf("failed to close kafka writer: %v", err)
 		}
 		return
-	}, application.HighPriority)
+	}, kernel.HighPriority)
 
 	mappers := make([]kafka2.TopicMapper, 0, len(producerCfg.Topic))
 	for _, topic := range producerCfg.Topic {
@@ -661,7 +661,7 @@ func InitKafkaProducerSasl(ctx context.Context, app *application.App, producerCf
 	return wrappedWriter
 }
 
-func InitPartitionedWriters(parent context.Context, custom *metrics.Metrics, app *application.App, cfg *config.Config) ([]kafka2.Producer, []kafka2.Producer) {
+func InitPartitionedWriters(parent context.Context, custom *metrics.Metrics, krl *kernel.Kernel, cfg *config.Config) ([]kafka2.Producer, []kafka2.Producer) {
 	var (
 		shardWriters []kafka2.Producer
 		mainWriters  []kafka2.Producer
@@ -671,7 +671,7 @@ func InitPartitionedWriters(parent context.Context, custom *metrics.Metrics, app
 	case config.IsProdEnv(cfg.Application.TestEnv) || config.IsStageEnv(cfg.Application.TestEnv):
 		for _, producerConfig := range cfg.Kafka.Producers {
 			writer := InitKafkaProducerSasl(
-				parent, app, producerConfig,
+				parent, krl, producerConfig,
 				&sync.Pool{
 					New: func() any {
 						return make([]kafka.Message, 0, kafka2.DoubleMultiplePool(producerConfig.WriteConfigs.BatchSize))
@@ -688,7 +688,7 @@ func InitPartitionedWriters(parent context.Context, custom *metrics.Metrics, app
 	case config.IsLocalEnv(cfg.Application.TestEnv):
 		for _, producerConfig := range cfg.Kafka.Producers {
 			writer := InitKafkaProducerPlaintext(
-				parent, app, producerConfig,
+				parent, krl, producerConfig,
 				&sync.Pool{
 					New: func() any {
 						return make([]kafka.Message, 0, kafka2.DoubleMultiplePool(producerConfig.WriteConfigs.BatchSize))

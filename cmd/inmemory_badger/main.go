@@ -13,7 +13,7 @@ import (
 	"github.com/PavelAgarkov/template/internal/service/budger_service"
 	badgerpbv1 "github.com/PavelAgarkov/template/protobuf/badger_interface/v1/service"
 
-	"github.com/PavelAgarkov/service-pkg/application"
+	"github.com/PavelAgarkov/service-pkg/kernel"
 
 	sdk "github.com/PavelAgarkov/badger-wrapper"
 
@@ -29,7 +29,7 @@ func main() {
 		panic("Failed to load configuration: " + err.Error())
 	}
 
-	app := application.NewApp(baseCtx, cfg.Application.Cores, cfg.Application.HeapOverflow)
+	app := kernel.NewDefaultKernel(baseCtx, cfg.Application.Cores, cfg.Application.HeapOverflow)
 	app.Start(cancel)
 
 	defer app.Stop()
@@ -63,7 +63,7 @@ func main() {
 		fmt.Println("Failed to open Badger storage:", err)
 		return
 	}
-	app.RegisterShutdown("badger-only-in-memory-storage", func() { _ = badgerStorageEngine.Close() }, application.MediumPriority)
+	app.RegisterShutdown("badger-only-in-memory-storage", func() { _ = badgerStorageEngine.Close() }, kernel.MediumPriority)
 
 	badgerRepository := badger.NewRepository(badgerStorageEngine)
 	queryEngineService := budger_service.NewQueryService(badgerRepository)

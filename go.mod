@@ -7,7 +7,7 @@ toolchain go1.24.6
 require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/PavelAgarkov/badger-wrapper v0.0.0-20260611104258-ce2de2e0539f
-	github.com/PavelAgarkov/service-pkg v0.0.0-20260630065147-45d1af60e390
+	github.com/PavelAgarkov/service-pkg v0.0.0-20260630101847-e3faeba1fe99
 	github.com/buger/jsonparser v1.2.0
 	github.com/bytedance/sonic v1.15.2
 	github.com/dgraph-io/badger/v4 v4.8.0
