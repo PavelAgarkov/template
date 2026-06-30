@@ -2,7 +2,7 @@ services:
   redis:
     image: redis:7.2.1
     hostname: redis1
-    container_name: github.com/PavelAgarkov/template-redis
+    container_name: template-redis
     ports:
       - '6379:6379'
     command: redis-server --save 20 1 --loglevel warning
@@ -13,7 +13,7 @@ services:
       retries: 2
       timeout: 2s
     networks:
-      - github.com/PavelAgarkov/template
+      - template
 
   postgres:
     image: postgres:15.0
@@ -27,16 +27,17 @@ services:
       timeout: 3s
       retries: 3
     environment:
+
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: qwerty12345
       POSTGRES_DB: postgres
     restart: unless-stopped
     networks:
-      - github.com/PavelAgarkov/template
+      - template
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.7.1
-    container_name: github.com/PavelAgarkov/template-zookeeper
+    container_name: template-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -46,11 +47,11 @@ services:
       - zookeeper_data:/var/lib/zookeeper/data
       - zookeeper_log:/var/lib/zookeeper/log
     networks:
-      - github.com/PavelAgarkov/template
+      - template
 
   kafka:
     image: confluentinc/cp-kafka:7.7.1
-    container_name: github.com/PavelAgarkov/template-kafka
+    container_name: template-kafka
     depends_on: [ zookeeper ]
     ports:
       - "9092:9092"   # внутренний listener для docker-сети (kafka-ui)
@@ -82,11 +83,11 @@ services:
       timeout: 5s
       retries: 30
     networks:
-      - github.com/PavelAgarkov/template
+      - template
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
-    container_name: github.com/PavelAgarkov/template-kafka-ui
+    container_name: template-kafka-ui
     depends_on:
       kafka:
         condition: service_healthy
@@ -97,12 +98,12 @@ services:
       # подключаемся к внутреннему PLAINTEXT-listener'у по имени сервиса
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
     networks:
-      - github.com/PavelAgarkov/template
+      - template
 
   mongo1:
     image: mongo:8.0
     hostname: mongo1
-    container_name: github.com/PavelAgarkov/template-mongodb-1
+    container_name: template-mongodb-1
     environment:
       MONGO_INITDB_DATABASE: mlp
     restart: unless-stopped
@@ -112,14 +113,14 @@ services:
     logging:
       driver: none
     networks:
-      - github.com/PavelAgarkov/template
+      - template
     volumes:
       - mongo1-data:/data/db
 
   mongo2:
     image: mongo:8.0
     hostname: mongo2
-    container_name: github.com/PavelAgarkov/template-mongodb-2
+    container_name: template-mongodb-2
     environment:
       MONGO_INITDB_DATABASE: mlp
     restart: unless-stopped
@@ -129,13 +130,13 @@ services:
     logging:
       driver: none
     networks:
-      - github.com/PavelAgarkov/template
+      - template
     volumes:
       - mongo2-data:/data/db
 
   mongosetup:
     image: mongo:8.0
-    container_name: github.com/PavelAgarkov/template-mongodb-setup
+    container_name: template-mongodb-setup
     depends_on:
       - mongo1
       - mongo2
@@ -151,7 +152,7 @@ services:
         ]
       });'"
     networks:
-      - github.com/PavelAgarkov/template
+      - template
 
 volumes:
   mongo1-data:
@@ -162,5 +163,5 @@ volumes:
   kafka_data:
 
 networks:
-  github.com/PavelAgarkov/template:
+  template:
     driver: bridge

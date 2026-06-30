@@ -1,11 +1,10 @@
 package routes
 
 import (
-	"github.com/PavelAgarkov/template/internal/service/readiness"
+	"log"
 	"net/http"
 
-	"github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
+	"github.com/PavelAgarkov/template/internal/service/readiness"
 )
 
 // LivenessProbe godoc
@@ -28,14 +27,8 @@ func LivenessProbe(w http.ResponseWriter, _ *http.Request) {
 func ReadinessProbe(ready *readiness.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		log.Printf("Readiness check for %s", r.URL.Path)
 		if err := ready.CheckReadiness(ctx); err != nil {
-			logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-				Msg:       "Liveness check failed",
-				Error:     err,
-				Component: "HTTPServer",
-				Method:    "ReadinessProbe",
-				Args:      r.URL.Path,
-			})
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}

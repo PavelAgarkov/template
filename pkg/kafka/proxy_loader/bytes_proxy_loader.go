@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+
 	models "github.com/PavelAgarkov/template/internal/service/kafka/model"
 	kafka2 "github.com/PavelAgarkov/template/pkg/kafka"
 

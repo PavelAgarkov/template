@@ -2,10 +2,9 @@ package handler
 
 import (
 	"context"
-	models "github.com/PavelAgarkov/template/internal/service/kafka/model"
+	"log"
 
-	loggerwrapper "github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
+	models "github.com/PavelAgarkov/template/internal/service/kafka/model"
 
 	"github.com/bytedance/sonic"
 	"github.com/segmentio/kafka-go"
@@ -25,13 +24,7 @@ func (h *TareMoveHandler) Handle(ctx context.Context, messages []kafka.Message) 
 		var tareMoveEvent models.WhTare
 		err := sonic.Unmarshal(msg.Value, &tareMoveEvent)
 		if err != nil {
-			logger.WriteErrorLog(ctx, &loggerwrapper.LogEntry{
-				Msg:       "Failed to unmarshal message",
-				Component: "kafka-reader",
-				Method:    "messageHandler",
-				Error:     err,
-				Args:      map[string]any{"message_offset": msg.Offset, "message_partition": msg.Partition},
-			})
+			log.Printf("Failed to unmarshal message: %v, error: %v", string(msg.Value), err)
 			continue
 		}
 
@@ -45,12 +38,7 @@ func (h *TareMoveHandler) Handle(ctx context.Context, messages []kafka.Message) 
 			continue
 		}
 
-		logger.WriteInfoLog(ctx, &loggerwrapper.LogEntry{
-			Msg:       "Processed tare-move event",
-			Component: "kafka-reader",
-			Method:    "messageHandler",
-			Args:      map[string]any{"message_offset": msg.Offset, "message_partition": msg.Partition},
-		})
+		log.Printf("Processed tare-move event: %+v", tareMoveEvent)
 	}
 
 	if len(events) == 0 {
@@ -67,12 +55,7 @@ func (h *TareMoveHandler) Handle(ctx context.Context, messages []kafka.Message) 
 				}
 			}
 			if err := h.processEventsV1(ctx, forProcessMessages); err != nil {
-				logger.WriteErrorLog(ctx, &loggerwrapper.LogEntry{
-					Msg:       "Failed to process V1 tare move events",
-					Component: "kafka-reader",
-					Method:    "messageHandler",
-					Error:     err,
-				})
+				log.Printf("Failed to process V1 tare move events: %v", err)
 				return err
 			}
 		}

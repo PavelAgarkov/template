@@ -37,8 +37,6 @@ import (
 	"github.com/PavelAgarkov/service-pkg/application"
 	clickhouse2 "github.com/PavelAgarkov/service-pkg/database/clickhouse"
 	postgres2 "github.com/PavelAgarkov/service-pkg/database/postgres"
-	"github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
 	scheduler2 "github.com/PavelAgarkov/service-pkg/scheduler"
 	"github.com/PavelAgarkov/service-pkg/server"
 	"github.com/PavelAgarkov/service-pkg/watchdog"
@@ -47,8 +45,6 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/mem"
@@ -84,10 +80,7 @@ func InitOrchestrator(app *application.App, wdog watchdog.LeaderElectingWatchdog
 		envelope, err := rateenvelopequeue.NewEnvelope(
 			rateenvelopequeue.WithScheduleModeInterval(5*time.Second),
 			rateenvelopequeue.WithInvoke(func(ctx context.Context, envelope *rateenvelopequeue.Envelope) error {
-				logger.WriteInfoLog(context.Background(), &logger_wrapper.LogEntry{
-					Msg:       "Envelope invoked",
-					Component: "orchestrator",
-				})
+				log.Printf("Orchestrator is running\n")
 				return nil
 			}),
 		)
@@ -133,25 +126,6 @@ func InitScheduler(ctx context.Context, app *application.App, schedulers ...sche
 	app.RegisterShutdown("scheduler_tasker", supervisor.Stop, application.ImmediatePriority)
 }
 
-func InitLogger() {
-	//l := xlog.NewLoggerWithOptions(cfg,
-	//	zap.AddCallerSkip(1),
-	//	zap.AddStacktrace(zapcore.DPanicLevel),
-	//	zap.AddStacktrace(zapcore.PanicLevel),
-	//	zap.AddStacktrace(zapcore.FatalLevel),
-	//)
-	//xlog.SetGlobalLogger(l)
-	if err := logger.InitLoggerForStdout(
-		zapcore.InfoLevel, false, nil,
-		zap.AddCallerSkip(2),
-		zap.AddStacktrace(zapcore.DPanicLevel),
-		zap.AddStacktrace(zapcore.PanicLevel),
-		zap.AddStacktrace(zapcore.FatalLevel),
-	); err != nil {
-		panic(fmt.Sprintf("failed to init logger: %v", err))
-	}
-}
-
 func InitRedisClient(ctx context.Context, app *application.App, redisCfg config.RedisConfig) *redis.Client {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     redisCfg.Address,
@@ -160,22 +134,12 @@ func InitRedisClient(ctx context.Context, app *application.App, redisCfg config.
 	})
 
 	if err := redisClient.Ping(ctx).Err(); err != nil {
-		logger.WritePanicLog(ctx, &logger_wrapper.LogEntry{
-			Msg:       "Failed to connect to Redis",
-			Component: "container",
-			Method:    "InitRedisClient",
-			Error:     err,
-		})
+		log.Fatalf("Failed to connect to Redis: %v", err)
 	}
 
 	app.RegisterShutdown("redis_client", func() {
 		if err := redisClient.Close(); err != nil {
-			logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-				Msg:       "Failed to close Redis client",
-				Component: "container",
-				Method:    "InitRedisClient",
-				Error:     err,
-			})
+			log.Printf("Failed to close Redis client: %v", err)
 		}
 	}, application.MediumPriority)
 
@@ -254,12 +218,7 @@ func InitPostgres(ctx context.Context, app *application.App, pgMasterCfg, pgAsyn
 func InitOrderClickhouse(ctx context.Context, app *application.App, cfg clickhouse2.Clickhouse) *clickhouse.Repository {
 	statisticOrderClickHouse, err := clickhouse2.NewClickhouseConnection(ctx, cfg)
 	if err != nil {
-		logger.WritePanicLog(ctx, &logger_wrapper.LogEntry{
-			Msg:       "Failed to connect to ClickHouse",
-			Component: "container",
-			Method:    "InitClickhouse",
-			Error:     err,
-		})
+		log.Fatalf("Failed to connect to ClickHouse: %v", err)
 	}
 	if statisticOrderClickHouse == nil {
 		return nil
@@ -324,13 +283,7 @@ func InitGorillaHttpServer(ctx context.Context, app *application.App, serverConf
 			func(writer http.ResponseWriter, request *http.Request) {
 				ctx := request.Context()
 				if err := live.CheckReadiness(ctx); err != nil {
-					logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-						Msg:       "Liveness check failed",
-						Error:     err,
-						Component: "SimpleServer",
-						Method:    "router",
-						Args:      request.URL.Path,
-					})
+					log.Printf("Readiness check failed: %v\n", err)
 					writer.WriteHeader(http.StatusServiceUnavailable)
 					return
 				}
@@ -375,13 +328,7 @@ func InitSimpleServer(ctx context.Context, app *application.App, serverConfig co
 		mux.HandleFunc("/readiness", func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			if err := container.Liveness.CheckReadiness(ctx); err != nil {
-				logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-					Msg:       "Liveness check failed",
-					Error:     err,
-					Component: "SimpleServer",
-					Method:    "router",
-					Args:      r.URL.Path,
-				})
+				log.Printf("Readiness check failed: %v\n", err)
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
 			}
@@ -447,12 +394,7 @@ func InitChiHTTPServer(
 									Message: msg,
 									Code:    code,
 								})
-								logger.WriteErrorLog(nil, &logger_wrapper.LogEntry{
-									Msg:       "failed to write json error response",
-									Error:     internalErr,
-									Component: "ProxyAPI",
-									Method:    "jsonError",
-								})
+								log.Printf("failed to write json error response: %v", internalErr)
 							}
 						}(w, "server in draining state try again", http.StatusServiceUnavailable, 5555)
 					}))
@@ -580,20 +522,11 @@ func InitTopicConsumerPool(
 						consumer := kafka2.NewKafkaConsumer(
 							consumerInternalConfigs,
 							func(ctx context.Context, messages []kafka.Message) error {
-								logger.WriteInfoLog(ctx, &logger_wrapper.LogEntry{
-									Msg:       fmt.Sprintf("Processing %d messages", len(messages)),
-									Component: "kafka-reader",
-									Method:    "messageHandler",
-								})
+								log.Printf("Processing %d messages", len(messages))
 
 								err := handler(ctx, messages)
 								if err != nil {
-									logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-										Msg:       "Handler returned error",
-										Component: "kafka-reader",
-										Method:    "messageHandler",
-										Error:     err,
-									})
+									log.Printf("Handler returned error: %v", err)
 									return err
 								}
 
@@ -645,12 +578,7 @@ func InitKafkaProducerPlaintext(ctx context.Context, app *application.App, produ
 	app.RegisterShutdown(producerCfg.WriteConfigs.ErrorLoggerLabel, func() {
 		err := w.Close()
 		if err != nil {
-			logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-				Msg:       "failed to close kafka writer",
-				Component: "kafka",
-				Method:    "InitKafkaProducer",
-				Error:     err,
-			})
+			log.Printf("failed to close kafka writer: %v", err)
 		}
 		return
 	}, application.HighPriority)
@@ -666,12 +594,7 @@ func InitKafkaProducerPlaintext(ctx context.Context, app *application.App, produ
 	wrappedWriter := kafka2.NewWriterWrapper(w, mappers, producerCfg.Type, producerCfg.Name, producerCfg.Entity, pool, producerCfg.Brokers, nil)
 	err := wrappedWriter.Ping(ctx)
 	if err != nil {
-		logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-			Msg:       "failed to ping kafka writer",
-			Component: "kafka",
-			Method:    "InitKafkaProducerPlaintext",
-			Error:     err,
-		})
+		log.Printf("failed to ping kafka writer: %v", err)
 	}
 
 	return wrappedWriter
@@ -689,12 +612,7 @@ func InitKafkaProducerSasl(ctx context.Context, app *application.App, producerCf
 			SASL: mech,
 		}
 	default:
-		logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-			Msg:       "unsupported kafka sasl mechanism",
-			Component: "kafka",
-			Method:    "InitKafkaProducerSasl",
-			Error:     fmt.Errorf("unsupported kafka sasl mechanism: %s", producerCfg.WriteConfigs.Auth.Mechanism),
-		})
+		log.Printf("unsupported kafka sasl mechanism: %s", producerCfg.WriteConfigs.Auth.Mechanism)
 		panic("unsupported kafka sasl mechanism")
 	}
 
@@ -721,12 +639,7 @@ func InitKafkaProducerSasl(ctx context.Context, app *application.App, producerCf
 	app.RegisterShutdown(producerCfg.WriteConfigs.ErrorLoggerLabel, func() {
 		err := w.Close()
 		if err != nil {
-			logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-				Msg:       "failed to close kafka writer",
-				Component: "kafka",
-				Method:    "InitKafkaProducer",
-				Error:     err,
-			})
+			log.Printf("failed to close kafka writer: %v", err)
 		}
 		return
 	}, application.HighPriority)
@@ -742,12 +655,7 @@ func InitKafkaProducerSasl(ctx context.Context, app *application.App, producerCf
 	wrappedWriter := kafka2.NewWriterWrapper(w, mappers, producerCfg.Type, producerCfg.Name, producerCfg.Entity, pool, producerCfg.Brokers, transport)
 	err := wrappedWriter.Ping(ctx)
 	if err != nil {
-		logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-			Msg:       "failed to ping kafka writer",
-			Component: "kafka",
-			Method:    "InitKafkaProducerSasl",
-			Error:     err,
-		})
+		log.Printf("failed to ping kafka writer: %v", err)
 	}
 
 	return wrappedWriter

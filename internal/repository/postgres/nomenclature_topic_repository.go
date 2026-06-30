@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/PavelAgarkov/template/internal/models/pg_model"
+	"log"
 	"time"
 
+	"github.com/PavelAgarkov/template/internal/models/pg_model"
+
 	sq "github.com/Masterminds/squirrel"
-	"github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -134,11 +134,7 @@ FOR UPDATE SKIP LOCKED;`
 		return fmt.Errorf("[ScheduleQueueElementWithBlock] Scan failed: %w", err)
 	}
 
-	logger.WriteInfoLog(ctx, &logger_wrapper.LogEntry{
-		Msg:       fmt.Sprintf("Processing task ID %d for office %d", task.ID, task.OfficeID),
-		Component: "NomenclatureTopicRepository",
-		Method:    "ScheduleQueueElementWithBlock",
-	})
+	log.Printf("Processing task ID %d for office %d", task.ID, task.OfficeID)
 
 	err := fn(timeoutCtx, tx, task)
 	if err != nil {
@@ -155,11 +151,7 @@ FOR UPDATE SKIP LOCKED;`
 		return fmt.Errorf("delete task skipped: row %d not found / already locked", task.ID)
 	}
 
-	logger.WriteInfoLog(ctx, &logger_wrapper.LogEntry{
-		Msg:       fmt.Sprintf("Successfully processed and deleted task ID %d for office %d", task.ID, task.OfficeID),
-		Component: "NomenclatureTopicRepository",
-		Method:    "ScheduleQueueElementWithBlock",
-	})
+	log.Printf("Successfully processed and deleted task ID %d for office %d", task.ID, task.OfficeID)
 
 	return nil
 }

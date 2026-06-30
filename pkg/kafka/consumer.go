@@ -3,12 +3,9 @@ package kafka
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"time"
 
-	loggerwrapper "github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -54,12 +51,7 @@ func NewKafkaConsumer(
 func (kc *Consumer) Run(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.WriteErrorLog(ctx, &loggerwrapper.LogEntry{
-				Msg:       "Panic recovered in runConsumer",
-				Error:     fmt.Errorf("%v", r),
-				Component: "kafka-reader",
-				Method:    "runConsumer",
-			})
+			log.Printf("Panic recovered in runConsumer: %v", r)
 		}
 	}()
 
@@ -83,12 +75,7 @@ func (kc *Consumer) Run(ctx context.Context) {
 	defer func() {
 		err := kc.rebalance(ctx)
 		if err != nil {
-			logger.WriteErrorLog(ctx, &loggerwrapper.LogEntry{
-				Msg:       "Failed to rebalance kafka reader on exit",
-				Component: "kafka-reader",
-				Method:    "runConsumer",
-				Error:     err,
-			})
+			log.Printf("Failed to rebalance kafka reader on exit: %v", err)
 		}
 	}()
 
@@ -106,7 +93,7 @@ func (kc *Consumer) Run(ctx context.Context) {
 		// чтобы при ошибке обработки одной партиции не блокировать обработку других
 		// и не мешать коммитить оффсеты успешно обработанных партиций
 		// (иначе может быть ситуация, когда одна проблемная партиция блокирует все остальные)
-		for partitionNumber, partitionBatch := range messages {
+		for _, partitionBatch := range messages {
 			if len(partitionBatch) == 0 {
 				continue
 			}
@@ -149,13 +136,7 @@ func (kc *Consumer) Run(ctx context.Context) {
 				// комит только если вы сделали DLQ обработку иначе будет потеря сообщений
 				//toCommit = append(toCommit, partitionBatch[len(partitionBatch)-1])
 
-				logger.WriteErrorLog(flushCtx, &loggerwrapper.LogEntry{
-					Msg:       "Message handling error",
-					Component: "kafka-reader",
-					Method:    "runConsumer",
-					Error:     err,
-					Args:      map[string]any{"partition": partitionNumber, "batch_size": len(partitionBatch)},
-				})
+				log.Printf("Message handling error with name %s and topic %s and group %s: %v", kc.configs.Name, kc.configs.Topic, kc.configs.GroupID, err)
 				continue
 			}
 
@@ -169,12 +150,7 @@ func (kc *Consumer) Run(ctx context.Context) {
 
 		if len(toCommit) > 0 {
 			if err := kc.reader.CommitMessages(flushCtx, toCommit...); err != nil {
-				logger.WriteErrorLog(flushCtx, &loggerwrapper.LogEntry{
-					Msg:       "Failed to commit messages",
-					Component: "kafka-reader",
-					Method:    "runConsumer",
-					Error:     err,
-				})
+				log.Printf("Failed to commit messages with name %s and topic %s and group %s: %v", kc.configs.Name, kc.configs.Topic, kc.configs.GroupID, err)
 				return err
 			}
 		}
@@ -267,19 +243,10 @@ func newFlushCtx(parent context.Context, d time.Duration) (context.Context, cont
 func (kc *Consumer) rebalance(ctx context.Context) error {
 	err := kc.reader.Close()
 	if err != nil {
-		logger.WriteErrorLog(ctx, &loggerwrapper.LogEntry{
-			Msg:       "Failed to close kafka reader on rebalance",
-			Component: "kafka-reader",
-			Method:    "rebalance",
-			Error:     err,
-		})
+		log.Printf("Failed to close kafka reader on rebalance with name %s and topic %s and group %s: %v", kc.configs.Name, kc.configs.Topic, kc.configs.GroupID, err)
 		return err
 	}
-	logger.WriteInfoLog(ctx, &loggerwrapper.LogEntry{
-		Msg:       "Kafka reader closed on rebalance",
-		Component: "kafka-reader",
-		Method:    "rebalance",
-	})
 
+	log.Printf("Kafka reader closed on rebalance with name %s and topic %s and group %s", kc.configs.Name, kc.configs.Topic, kc.configs.GroupID)
 	return nil
 }

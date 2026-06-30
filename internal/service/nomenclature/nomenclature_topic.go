@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/PavelAgarkov/template/internal/models"
 	"github.com/PavelAgarkov/template/internal/models/pg_model"
 	"github.com/PavelAgarkov/template/internal/repository/postgres"

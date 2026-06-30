@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/PavelAgarkov/template/internal/models/pg_model"
+	"log"
 	"time"
 
-	"github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
+	"github.com/PavelAgarkov/template/internal/models/pg_model"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -68,11 +67,7 @@ FOR UPDATE SKIP LOCKED;`
 		return fmt.Errorf("[Dequeue] Scan command fn dequeue filed: %w", err)
 	}
 
-	logger.WriteInfoLog(ctx, &logger_wrapper.LogEntry{
-		Msg:       fmt.Sprintf("[Dequeue] Command fn dequeue filed: %v officeId %v", cmd.ID, cmd.OfficeID),
-		Component: "CommandTopicRepository",
-		Method:    "Dequeue",
-	})
+	log.Printf("[Dequeue] Command fn dequeue: %v officeId %v", cmd.ID, cmd.OfficeID)
 
 	err := fn(timeoutCtx, tx, cmd)
 	if err != nil {
@@ -89,11 +84,7 @@ FOR UPDATE SKIP LOCKED;`
 		return fmt.Errorf("delete cmd skipped: row %d not found / already locked", cmd.ID)
 	}
 
-	logger.WriteInfoLog(ctx, &logger_wrapper.LogEntry{
-		Msg:       fmt.Sprintf("[Dequeue] Successfully processed and deleted command ID %d for office %d", cmd.ID, cmd.OfficeID),
-		Component: "CommandTopicRepository",
-		Method:    "Dequeue",
-	})
+	log.Printf("[Dequeue] Successfully processed and deleted command ID %d for office %d", cmd.ID, cmd.OfficeID)
 
 	return nil
 }

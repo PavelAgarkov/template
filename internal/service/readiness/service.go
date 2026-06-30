@@ -3,12 +3,12 @@ package readiness
 import (
 	"context"
 	"fmt"
-	"github.com/PavelAgarkov/template/internal/repository/clickhouse"
-	"github.com/PavelAgarkov/template/internal/repository/postgres"
+	"log"
 	"time"
 
-	"github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
+	"github.com/PavelAgarkov/template/internal/repository/clickhouse"
+	"github.com/PavelAgarkov/template/internal/repository/postgres"
+
 	"github.com/go-redis/redis/v8"
 	"golang.org/x/sync/errgroup"
 )
@@ -87,11 +87,7 @@ func (s *Service) CheckReadiness(ctx context.Context) error {
 		return fmt.Errorf("readiness failed: %w", err)
 	}
 
-	logger.WriteInfoLog(ctx, &logger_wrapper.LogEntry{
-		Msg:       "Readiness check passed",
-		Component: "readiness",
-		Method:    "CheckReadiness",
-	})
+	log.Printf("Readiness check passed")
 
 	return nil
 }

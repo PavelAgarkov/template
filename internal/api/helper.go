@@ -2,11 +2,10 @@ package api
 
 import (
 	"context"
-	"fmt"
+	"log"
+
 	"github.com/PavelAgarkov/template/internal/service/autorization"
 
-	"github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -28,32 +27,16 @@ func UnaryLoggerInterceptor() grpc.UnaryServerInterceptor {
 		//	return nil, status.Error(codes.Unauthenticated, "missing client name in context")
 		//}
 
-		logger.WriteInfoLog(ctx, &logger_wrapper.LogEntry{
-			Msg:       fmt.Sprintf("Request from client: %s, method: %s, requestID %s", clientName, info.FullMethod, requestId),
-			Component: "grpc",
-			Method:    "UnaryLoggerInterceptor",
-			Result:    "Request received",
-		})
+		log.Printf("Request from client: %s, method: %s, requestID %s", clientName, info.FullMethod, requestId)
 
 		resp, err := handler(ctx, req)
 		if err != nil {
-			logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-				Msg:       fmt.Sprintf("Error handling request from client %s: %v", clientName, err),
-				Component: "grpc",
-				Method:    "UnaryLoggerInterceptor",
-				Result:    "Error occurred",
-				Error:     err,
-			})
+			log.Printf("Error handling request from client %s: %v", clientName, err)
 
 			return nil, err
 		}
 
-		logger.WriteInfoLog(ctx, &logger_wrapper.LogEntry{
-			Msg:       fmt.Sprintf("Response sent to client: %s, requestID: %s", clientName, requestId),
-			Component: "grpc",
-			Method:    info.FullMethod,
-			Result:    "Response sent successfully",
-		})
+		log.Printf("Response sent to client: %s, requestID: %s", clientName, requestId)
 		return resp, nil
 	}
 }

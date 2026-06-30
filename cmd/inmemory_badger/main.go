@@ -29,12 +29,8 @@ func main() {
 		panic("Failed to load configuration: " + err.Error())
 	}
 
-	container.InitLogger()
-
 	app := application.NewApp(baseCtx, cfg.Application.Cores, cfg.Application.HeapOverflow)
 	app.Start(cancel)
-
-	defer app.FlushLogger()
 
 	defer app.Stop()
 	defer app.RegisterRecovers()()

@@ -3,12 +3,11 @@ package kafka
 import (
 	"context"
 	"fmt"
+	"log"
 	"runtime"
 	"sync"
 	"time"
 
-	loggerwrapper "github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
 	"github.com/segmentio/kafka-go"
 	"golang.org/x/sync/errgroup"
 )
@@ -108,12 +107,7 @@ func (w *WriterWrapper) Ping(ctx context.Context) error {
 
 			err = conn.Close()
 			if err != nil {
-				logger.WriteErrorLog(gctx, &loggerwrapper.LogEntry{
-					Msg:       fmt.Sprintf("failed to close connection to kafka broker %s: %v", addr, err),
-					Component: "producer",
-					Method:    "Ping",
-					Error:     err,
-				})
+				log.Printf("failed to close connection to kafka broker %s: %v", addr, err)
 			}
 
 			return nil

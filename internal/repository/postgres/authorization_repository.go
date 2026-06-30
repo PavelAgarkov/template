@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/PavelAgarkov/template/internal/models/pg_model"
 
 	"github.com/jackc/pgx/v5"

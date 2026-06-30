@@ -3,14 +3,13 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
-	"github.com/PavelAgarkov/template/internal/config"
-	"github.com/PavelAgarkov/template/internal/service/readiness"
+	"log"
 	"net/http"
 	"time"
 
-	"github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
+	"github.com/PavelAgarkov/template/internal/config"
+	"github.com/PavelAgarkov/template/internal/service/readiness"
+
 	"github.com/PavelAgarkov/service-pkg/utils"
 )
 
@@ -37,21 +36,11 @@ func NewSimpleServer(ctx context.Context, container *Container, router func(mux 
 
 	utils.GoRecover(ctx, func(ctx context.Context) {
 		if err := simpleServer.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-				Msg:       fmt.Sprintf("Failed to start simple server on %s", config.Addr),
-				Error:     err,
-				Component: "SimpleServer",
-				Method:    "CreateSimple",
-				Args:      config,
-			})
+			log.Printf("Failed to start simple server on %s: %v", config.Addr, err)
 		}
 	})
 
-	logger.WriteInfoLog(ctx, &logger_wrapper.LogEntry{
-		Msg:       fmt.Sprintf("simple server is started on %s", config.Addr),
-		Component: "SimpleServer",
-		Method:    "CreateSimple",
-	})
+	log.Printf("simple server is started on %s", config.Addr)
 
 	return simpleServer
 }
@@ -61,13 +50,7 @@ func (simple *SimpleServer) Stop(shutdownDuration time.Duration) func() {
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownDuration)
 		defer cancel()
 		if err := simple.server.Shutdown(ctx); err != nil {
-			logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-				Msg:       "Failed to shutdown simple server",
-				Error:     err,
-				Component: "SimpleServer",
-				Method:    "stop",
-				Args:      simple.server.Addr,
-			})
+			log.Printf("Failed to shutdown simple server on %s: %v", simple.server.Addr, err)
 		}
 	}
 }

@@ -5,13 +5,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"github.com/PavelAgarkov/template/internal/models/pg_model"
-	"github.com/PavelAgarkov/template/internal/repository/postgres"
+	"log"
 	"sync"
 	"time"
 
-	"github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
+	"github.com/PavelAgarkov/template/internal/models/pg_model"
+	"github.com/PavelAgarkov/template/internal/repository/postgres"
+
 	"github.com/PavelAgarkov/service-pkg/utils"
 )
 
@@ -105,12 +105,7 @@ func (s *Service) reload(ctx context.Context) {
 				return
 			case <-ticker.C:
 				if err := s.updateUsers(ctx); err != nil {
-					logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-						Msg:       "failed to update users",
-						Error:     err,
-						Component: "authorization_service",
-						Method:    "reload",
-					})
+					log.Printf("failed to update users: %v", err)
 					return
 				}
 			}

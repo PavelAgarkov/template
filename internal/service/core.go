@@ -3,15 +3,15 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
+	"time"
+
 	"github.com/PavelAgarkov/template/internal/config"
 	"github.com/PavelAgarkov/template/internal/models"
 	"github.com/PavelAgarkov/template/internal/models/pg_model"
 	"github.com/PavelAgarkov/template/internal/service/command_bus"
 	"github.com/PavelAgarkov/template/internal/service/nomenclature"
-	"time"
 
-	"github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
 	scheduler2 "github.com/PavelAgarkov/service-pkg/scheduler"
 
 	"github.com/jackc/pgx/v5"
@@ -99,13 +99,7 @@ func (core *Core) initCommandBusConsumer() {
 				Func: func(ctx context.Context) error {
 					err := core.dequeueCommand(ctx, pg_model.OfficeID(queueNumber), core.commandService.Invoke)
 					if err != nil {
-						logger.WriteErrorLog(ctx, &logger_wrapper.LogEntry{
-							Msg:       "Dequeue command",
-							Args:      queueNumber,
-							Component: "Queuer",
-							Method:    "initCommandBusConsumer",
-							Error:     err,
-						})
+						log.Printf("Dequeue command failed for office %d: %v\n", queueNumber, err)
 						return err
 					}
 					return nil
@@ -127,12 +121,7 @@ func (core *Core) initCommandBusTasks(ctx context.Context) {
 		// эта будет срабатывать каждый час
 		core.cron.Add(ctx, core.config.Application.Core.TTLCacheRecompilerInterval,
 			func(fnCtx context.Context) error {
-				logger.WriteDebugLog(ctx, &logger_wrapper.LogEntry{
-					Msg:       "Recalculating NM tasks by TTL",
-					Args:      queueNumber,
-					Component: "Queuer",
-					Method:    "initCronTasks",
-				})
+				log.Printf("Recalculating NM tasks by TTL for office %d\n", queueNumber)
 				jsonOffset, err := command_bus.CreateStartOffset(pg_model.OfficeID(queueNumber))
 				if err != nil {
 					return fmt.Errorf("[initCronTasks] CreateStartOffset failed: %w", err)
@@ -149,12 +138,7 @@ func (core *Core) initCommandBusTasks(ctx context.Context) {
 		// это тоже будет срабатывать каждый час
 		core.cron.Add(ctx, core.config.Application.Core.ScheduleDeleteUnusedNomenclatureFilterInterval,
 			func(fnCtx context.Context) error {
-				logger.WriteDebugLog(ctx, &logger_wrapper.LogEntry{
-					Msg:       "Deleting unused NM from nomenclature filter",
-					Args:      queueNumber,
-					Component: "Queuer",
-					Method:    "initCronTasks",
-				})
+				log.Printf("Deleting unused NM from nomenclature filter for office %d\n", queueNumber)
 				return core.commandService.CreateCommand(ctx, &pg_model.Command{
 					OfficeID:    pg_model.OfficeID(queueNumber),
 					Type:        pg_model.DeleteNmFromNomenclatureFilterScheduler,
@@ -165,12 +149,7 @@ func (core *Core) initCommandBusTasks(ctx context.Context) {
 
 		core.cron.Add(ctx, core.config.Application.Core.RemoveUnupdatedNomenclatureCacheInterval,
 			func(fnCtx context.Context) error {
-				logger.WriteDebugLog(ctx, &logger_wrapper.LogEntry{
-					Msg:       "Removing unupdated NM from nomenclature cache",
-					Args:      queueNumber,
-					Component: "Queuer",
-					Method:    "initCronTasks",
-				})
+				log.Printf("Removing unupdated NM from nomenclature cache for office %d\n", queueNumber)
 				return core.commandService.CreateCommand(ctx, &pg_model.Command{
 					OfficeID:    pg_model.OfficeID(queueNumber),
 					Type:        pg_model.DeleteFromNomenclatureCacheTurnover,

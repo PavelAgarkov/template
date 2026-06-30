@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/PavelAgarkov/template/container"
@@ -24,8 +25,6 @@ import (
 
 	"github.com/PavelAgarkov/service-pkg/application"
 	locker2 "github.com/PavelAgarkov/service-pkg/locker"
-	loggerwrapper "github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
 	"github.com/PavelAgarkov/service-pkg/readiness_barrier"
 	scheduler2 "github.com/PavelAgarkov/service-pkg/scheduler"
 	grpcserver "github.com/PavelAgarkov/service-pkg/server"
@@ -44,12 +43,8 @@ func main() {
 		panic("Failed to load configuration: " + err.Error())
 	}
 
-	container.InitLogger()
-
 	app := application.NewApp(baseCtx, cfg.Application.Cores, cfg.Application.HeapOverflow)
 	app.Start(cancel)
-
-	defer app.FlushLogger()
 
 	defer app.Stop()
 	defer app.RegisterRecovers()()
@@ -70,12 +65,7 @@ func main() {
 	app.RegisterShutdown("mongodb.pool", func() {
 		err := mongoPool.Close(baseCtx)
 		if err != nil {
-			logger.WriteErrorLog(context.Background(), &loggerwrapper.LogEntry{
-				Msg:       "Failed to close mongo pool",
-				Component: "mongo_db_pool",
-				Method:    "Close",
-				Error:     err,
-			})
+			log.Printf("Failed to close mongo pool: %v\n", err)
 		}
 	}, application.LowestPriority)
 

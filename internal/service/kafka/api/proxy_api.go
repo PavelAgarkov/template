@@ -1,15 +1,15 @@
 package api
 
 import (
-	"github.com/PavelAgarkov/template/pkg/kafka"
 	"io"
+	"log"
 	"net/http"
+
+	"github.com/PavelAgarkov/template/pkg/kafka"
 
 	"github.com/PavelAgarkov/template/pkg/kafka/proxy_loader"
 	"github.com/PavelAgarkov/template/pkg/metrics"
 
-	loggerwrapper "github.com/PavelAgarkov/service-pkg/logger"
-	logger "github.com/PavelAgarkov/service-pkg/logger/zap_engine"
 	"github.com/valyala/bytebufferpool"
 )
 
@@ -42,7 +42,6 @@ func NewProxyAPI(metrics *metrics.Metrics, proxyLoader proxy_loader.ProxyLoader)
 }
 
 func (p *ProxyAPI) ReceiveShkOnPlaceBytesBufferStreamV1(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
 	defer r.Body.Close()
 
 	bodyByteBuffer := p.byteBufferShkPool.Get()
@@ -64,12 +63,7 @@ func (p *ProxyAPI) ReceiveShkOnPlaceBytesBufferStreamV1(w http.ResponseWriter, r
 	// Копируем тело в bodyBB, используя tmpBB.B как io.Copy буфер
 	_, err := io.CopyBuffer(bodyByteBuffer, r.Body, tempByteBuffer.B)
 	if err != nil && err != io.EOF {
-		logger.WriteErrorLog(ctx, &loggerwrapper.LogEntry{
-			Msg:       "read body error",
-			Error:     err,
-			Component: "ProxyAPI",
-			Method:    "ReceiveShkOnPlaceBytesBufferStreamV1",
-		})
+		log.Printf("read body error: %v", err)
 		return
 	}
 
@@ -77,7 +71,6 @@ func (p *ProxyAPI) ReceiveShkOnPlaceBytesBufferStreamV1(w http.ResponseWriter, r
 }
 
 func (p *ProxyAPI) ReceiveTareMoveBytesBufferStreamV1(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
 	defer r.Body.Close()
 
 	bodyByteBuffer := p.byteBufferTarePool.Get()
@@ -99,12 +92,7 @@ func (p *ProxyAPI) ReceiveTareMoveBytesBufferStreamV1(w http.ResponseWriter, r *
 	// читаем тело целиком в bodyBB через наш чанк
 	_, err := io.CopyBuffer(bodyByteBuffer, r.Body, tempByteBuffer.B)
 	if err != nil && err != io.EOF {
-		logger.WriteErrorLog(ctx, &loggerwrapper.LogEntry{
-			Msg:       "read body error",
-			Error:     err,
-			Component: "ProxyAPI",
-			Method:    "ReceiveTareMoveBytesBufferStreamV1",
-		})
+		log.Printf("read body error: %v", err)
 		return
 	}
 
